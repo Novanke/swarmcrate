@@ -191,7 +191,7 @@ pub fn create_torrent(
     return create_v2_torrent(files, options, read)
   }
   if options.mode == Hybrid {
-    reject("mode", "hybrid not available in this build")
+    return create_hybrid_torrent(files, options, read)
   }
   let order = sorted_source_indices(files)
   let sorted = order.map(fn(i) { files[i] })
@@ -219,6 +219,7 @@ priv struct ParsedTorrent {
   summary : TorrentInfo
   pieces : Bytes
   roots : Array[V2FileHash]
+  entries : Array[DataEntry]
 }
 
 ///|
@@ -304,6 +305,9 @@ fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
     },
     pieces,
     roots: [],
+    entries: files.mapi(fn(i, f) {
+      DataEntry::{ source: i, length: f.length, padding: false, }
+    }),
   }
 }
 
@@ -321,4 +325,14 @@ pub fn expected_v1_pieces(data : Bytes) -> Bytes raise CrateError {
 ///|
 pub fn expected_v2_files(data : Bytes) -> Array[V2FileHash] raise CrateError {
   parse_torrent(data).roots
+}
+
+///|
+/// V1 storage size includes virtual hybrid padding, unlike the real file total.
+pub fn torrent_storage_bytes(data : Bytes) -> Int64 raise CrateError {
+  let mut total = 0L
+  for entry in parse_torrent(data).entries {
+    total += entry.length
+  }
+  total
 }

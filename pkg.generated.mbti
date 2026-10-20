@@ -26,6 +26,8 @@ pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes rais
 
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
 
+pub fn torrent_storage_bytes(Bytes) -> Int64 raise CrateError
+
 pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateError
 
 pub fn validate_piece_layer(Bytes, Int64, Int32, Bytes) -> Unit raise CrateError

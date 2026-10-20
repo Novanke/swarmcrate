@@ -129,9 +129,7 @@ fn parse_v2_torrent(
   if as_int(require_key(info, "meta version")) != 2L {
     reject("mode", "unsupported meta version")
   }
-  if lookup(info, "pieces") is Some(_) {
-    reject("mode", "hybrid not available in this build")
-  }
+  let hybrid = lookup(info, "pieces") is Some(_)
   let name = as_text(require_key(info, "name"))
   let piece = as_int(require_key(info, "piece length"))
   if piece < 16384L || piece > 16777216L {
@@ -141,7 +139,11 @@ fn parse_v2_torrent(
   let files : Array[SourceFile] = []
   let roots : Array[Bytes] = []
   walk_file_tree(require_key(info, "file tree"), [], files, roots)
-  let single = files.length() == 1 && files[0].path == [name]
+  let single = if hybrid {
+    lookup(info, "length") is Some(_)
+  } else {
+    files.length() == 1 && files[0].path == [name]
+  }
   let private_flag = match lookup(info, "private") {
     None => false
     Some(n) => {
@@ -197,10 +199,27 @@ fn parse_v2_torrent(
       reject("piece_layers", "unreferenced piece layer")
     }
   }
+  let (pieces, entries) = if hybrid {
+    validate_hybrid(info, files, single, piece.to_int())
+  } else {
+    if lookup(info, "length") is Some(_) || lookup(info, "files") is Some(_) {
+      reject("metainfo", "v1 layout without pieces")
+    }
+    (
+      b"",
+      files.mapi(fn(i, f) {
+        DataEntry::{ source: i, length: f.length, padding: false, }
+      }),
+    )
+  }
   {
     summary: {
       name,
-      mode: V2,
+      mode: if hybrid {
+        Hybrid
+      } else {
+        V2
+      },
       piece_length: piece.to_int(),
       files,
       single_file: single,
@@ -208,12 +227,19 @@ fn parse_v2_torrent(
       trackers: options.trackers,
       web_seeds: options.web_seeds,
       comment: options.comment,
-      info_hash_v1: None,
+      info_hash_v1: if hybrid {
+        Some(
+          @crypto.bytes_to_hex_string(@crypto.sha1(data[info.start:info.end])),
+        )
+      } else {
+        None
+      },
       info_hash_v2: Some(
         @crypto.bytes_to_hex_string(@crypto.sha256(data[info.start:info.end])),
       ),
     },
-    pieces: b"",
+    pieces,
+    entries,
     roots: hashes,
   }
 }
