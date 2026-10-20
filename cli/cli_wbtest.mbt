@@ -1,0 +1,63 @@
+///|
+extern "js" fn cli_fixture() -> String =
+  #| () => {
+  #|   const fs=process.getBuiltinModule('node:fs'),os=process.getBuiltinModule('node:os'),p=process.getBuiltinModule('node:path');
+  #|   const dir=fs.mkdtempSync(p.join(os.tmpdir(),'swarmcrate-cli-'));
+  #|   fs.mkdirSync(p.join(dir,'input'));
+  #|   fs.writeFileSync(p.join(dir,'input','a.txt'),'hello');
+  #|   return dir;
+  #| }
+
+///|
+extern "js" fn cli_cleanup(path : String) -> Unit =
+  #| path => process.getBuiltinModule('node:fs').rmSync(path,{recursive:true,force:true})
+
+///|
+test "CLI creates usable files edits endpoints verifies and uses meaningful exit codes" {
+  let dir = cli_fixture()
+  errdefer cli_cleanup(dir)
+  for mode in ["v1", "v2", "hybrid"] {
+    let torrent = dir + "/" + mode + ".torrent"
+    let created = execute([
+      "create",
+      dir + "/input",
+      torrent,
+      "--mode",
+      mode,
+      "--piece-length",
+      "16384",
+    ])
+    assert_eq(created.code, 0)
+    assert_true(created.output.contains("info_hash"))
+    assert_eq(execute(["inspect", torrent]).code, 0)
+    assert_true(
+      execute(["magnet", torrent]).output.has_prefix("magnet:?xt=urn:"),
+    )
+    assert_eq(
+      execute([
+        "verify",
+        torrent,
+        dir + "/input",
+        "--html",
+        dir + "/" + mode + ".html",
+      ]).code,
+      0,
+    )
+    assert_eq(execute(["verify", torrent, dir + "/missing"]).code, 2)
+    assert_eq(
+      execute([
+        "edit",
+        torrent,
+        dir + "/edited-" + mode + ".torrent",
+        "--tracker",
+        "https://example.org/announce",
+      ]).code,
+      0,
+    )
+    assert_eq(execute(["create", dir + "/input", torrent]).code, 1)
+  }
+  assert_eq(execute(["create", "a", "b", "--bad"]).code, 1)
+  assert_eq(execute(["verify"]).code, 1)
+  assert_eq(execute(["help"]).code, 0)
+  cli_cleanup(dir)
+}

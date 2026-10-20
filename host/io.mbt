@@ -41,7 +41,7 @@ extern "js" fn os_io(
   #|       try {
   #|         if (fs.lstatSync(cursor).isSymbolicLink()) throw Error('symbolic links are unsupported');
   #|       } catch (e) {
-  #|         if (e.code === 'ENOENT' && i === parts.length-1 && (op === 'write' || op === 'stat')) break;
+  #|         if (e.code === 'ENOENT' && (op === 'stat' || (i === parts.length-1 && op === 'write'))) break;
   #|         throw e;
   #|       }
   #|     }

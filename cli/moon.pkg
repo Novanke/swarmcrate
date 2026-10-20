@@ -1,0 +1,10 @@
+import {
+  "Novanke/swarmcrate" @lib,
+  "Novanke/swarmcrate/host",
+  "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  supported_targets: "js",
+)

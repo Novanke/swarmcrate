@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Novanke/swarmcrate/cli"
+
+// Values
+pub fn arguments() -> Array[String]
+
+pub fn execute(Array[String]) -> CommandResult
+
+pub fn set_exit_code(Int32) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct CommandResult {
+  code : Int32
+  output : String
+}
+
+// Type aliases
+
+// Traits

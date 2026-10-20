@@ -1,5 +1,9 @@
-// import {
-//   "Novanke/swarmcrate" @lib,
-// }
+import {
+  "Novanke/swarmcrate/cli",
+}
 
 pkgtype(kind: "executable")
+
+options(
+  supported_targets: "js",
+)
