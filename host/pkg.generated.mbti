@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Novanke/swarmcrate/host"
+
+import {
+  "Novanke/swarmcrate",
+}
+
+// Values
+pub fn read_metainfo(String) -> Bytes raise @swarmcrate.CrateError
+
+pub fn read_range(String, Int64, Int32, stamp? : String) -> Bytes raise @swarmcrate.CrateError
+
+pub fn read_source(Array[DiskSource], Int32, Int64, Int32) -> Bytes raise @swarmcrate.CrateError
+
+pub fn resolve(String) -> String raise @swarmcrate.CrateError
+
+pub fn scan(String) -> (String, Bool, Array[DiskSource]) raise @swarmcrate.CrateError
+
+pub fn stat(String) -> FileStat raise @swarmcrate.CrateError
+
+pub fn write_new(String, Bytes) -> Unit raise @swarmcrate.CrateError
+
+// Errors
+
+// Types and methods
+pub(all) struct DiskSource {
+  descriptor : @swarmcrate.SourceFile
+  absolute_path : String
+  stamp : String
+}
+
+pub(all) struct FileStat {
+  kind : String
+  length : Int64
+  stamp : String
+}
+
+// Type aliases
+
+// Traits
