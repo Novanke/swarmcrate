@@ -12,6 +12,8 @@ pub fn create_options(String) -> CreateOptions
 
 pub fn create_torrent(Array[SourceFile], CreateOptions, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
 
+pub fn edit_distribution(Bytes, Array[Array[String]], Array[String]) -> Bytes raise CrateError
+
 pub fn expected_v1_pieces(Bytes) -> Bytes raise CrateError
 
 pub fn expected_v2_files(Bytes) -> Array[V2FileHash] raise CrateError
