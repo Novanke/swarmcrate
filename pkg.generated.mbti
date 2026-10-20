@@ -22,7 +22,11 @@ pub fn format_magnet(Magnet) -> String raise CrateError
 
 pub fn hash_v2_file(Int64, Int32, (Int64, Int32) -> Bytes raise CrateError) -> V2FileHash raise CrateError
 
+pub fn info_json(TorrentInfo) -> Json
+
 pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
+
+pub fn mode_name(TorrentMode) -> String
 
 pub fn parse_magnet(String) -> Magnet raise CrateError
 
@@ -41,6 +45,10 @@ pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateErr
 pub fn validate_piece_layer(Bytes, Int64, Int32, Bytes) -> Unit raise CrateError
 
 pub fn validate_sources(Array[SourceFile]) -> Int64 raise CrateError
+
+pub fn verification_html(TorrentInfo, VerificationReport) -> String
+
+pub fn verification_json(VerificationReport) -> Json
 
 pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32) -> VerificationReport raise CrateError
 
