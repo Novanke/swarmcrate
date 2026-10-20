@@ -10,6 +10,12 @@ pub fn check_bencode(Bytes) -> Unit raise CrateError
 
 pub fn create_options(String) -> CreateOptions
 
+pub fn create_torrent(Array[SourceFile], CreateOptions, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
+
+pub fn expected_v1_pieces(Bytes) -> Bytes raise CrateError
+
+pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
+
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
 
 pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
@@ -47,6 +53,20 @@ pub(all) struct PieceSpan {
 pub(all) struct SourceFile {
   path : Array[String]
   length : Int64
+}
+
+pub(all) struct TorrentInfo {
+  name : String
+  mode : TorrentMode
+  piece_length : Int32
+  files : Array[SourceFile]
+  single_file : Bool
+  private_torrent : Bool
+  trackers : Array[Array[String]]
+  web_seeds : Array[String]
+  comment : String
+  info_hash_v1 : String?
+  info_hash_v2 : String?
 }
 
 pub(all) enum TorrentMode {
