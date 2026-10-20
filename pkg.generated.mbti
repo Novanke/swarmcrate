@@ -8,6 +8,14 @@ import {
 // Values
 pub fn check_bencode(Bytes) -> Unit raise CrateError
 
+pub fn create_options(String) -> CreateOptions
+
+pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
+
+pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateError
+
+pub fn validate_sources(Array[SourceFile]) -> Int64 raise CrateError
+
 // Errors
 pub(all) suberror CrateError {
   CrateError(String, String)
@@ -15,6 +23,30 @@ pub(all) suberror CrateError {
 pub fn CrateError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub(all) struct CreateOptions {
+  name : String
+  mode : TorrentMode
+  piece_length : Int32
+  single_file : Bool
+  private_torrent : Bool
+  trackers : Array[Array[String]]
+  web_seeds : Array[String]
+  comment : String
+}
+
+pub(all) struct SourceFile {
+  path : Array[String]
+  length : Int64
+}
+
+pub(all) enum TorrentMode {
+  V1
+  V2
+  Hybrid
+} derive(Eq, @debug.Debug)
+pub fn TorrentMode::equal(Self, Self) -> Bool
+pub fn TorrentMode::not_equal(Self, Self) -> Bool
+pub fn TorrentMode::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
