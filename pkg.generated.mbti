@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Novanke/swarmcrate"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn check_bencode(Bytes) -> Unit raise CrateError
+
+// Errors
+pub(all) suberror CrateError {
+  CrateError(String, String)
+} derive(@debug.Debug)
+pub fn CrateError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+
+// Type aliases
+
+// Traits

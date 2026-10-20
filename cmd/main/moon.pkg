@@ -1,0 +1,5 @@
+// import {
+//   "Novanke/swarmcrate" @lib,
+// }
+
+pkgtype(kind: "executable")
