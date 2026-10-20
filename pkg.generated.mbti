@@ -16,15 +16,21 @@ pub fn expected_v1_pieces(Bytes) -> Bytes raise CrateError
 
 pub fn expected_v2_files(Bytes) -> Array[V2FileHash] raise CrateError
 
+pub fn format_magnet(Magnet) -> String raise CrateError
+
 pub fn hash_v2_file(Int64, Int32, (Int64, Int32) -> Bytes raise CrateError) -> V2FileHash raise CrateError
 
 pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
+
+pub fn parse_magnet(String) -> Magnet raise CrateError
 
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
 
 pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
 
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
+
+pub fn torrent_magnet(Bytes) -> String raise CrateError
 
 pub fn torrent_storage_bytes(Bytes) -> Int64 raise CrateError
 
@@ -60,6 +66,13 @@ pub(all) struct FileIssue {
   expected : Int64
   actual : Int64?
   reason : String
+}
+
+pub(all) struct Magnet {
+  v1 : String?
+  v2 : String?
+  name : String?
+  trackers : Array[String]
 }
 
 pub(all) struct PieceFailure {
