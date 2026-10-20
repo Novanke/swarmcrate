@@ -34,6 +34,8 @@ pub fn validate_piece_layer(Bytes, Int64, Int32, Bytes) -> Unit raise CrateError
 
 pub fn validate_sources(Array[SourceFile]) -> Int64 raise CrateError
 
+pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32) -> VerificationReport raise CrateError
+
 // Errors
 pub(all) suberror CrateError {
   CrateError(String, String)
@@ -50,6 +52,21 @@ pub(all) struct CreateOptions {
   trackers : Array[Array[String]]
   web_seeds : Array[String]
   comment : String
+}
+
+pub(all) struct FileIssue {
+  file : Int32
+  path : String
+  expected : Int64
+  actual : Int64?
+  reason : String
+}
+
+pub(all) struct PieceFailure {
+  scheme : String
+  piece : Int32
+  spans : Array[PieceSpan]
+  reason : String
 }
 
 pub(all) struct PieceSpan {
@@ -89,6 +106,16 @@ pub fn TorrentMode::to_repr(Self) -> @debug.Repr
 pub(all) struct V2FileHash {
   root : Bytes
   piece_layer : Bytes
+}
+
+pub(all) struct VerificationReport {
+  ok : Bool
+  checked_pieces : Int32
+  failed_pieces : Int32
+  unreadable_pieces : Int32
+  file_issues : Array[FileIssue]
+  failures : Array[PieceFailure]
+  details_truncated : Bool
 }
 
 // Type aliases
