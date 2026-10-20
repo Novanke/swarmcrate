@@ -10,6 +10,10 @@ pub fn check_bencode(Bytes) -> Unit raise CrateError
 
 pub fn create_options(String) -> CreateOptions
 
+pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
+
+pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
+
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
 
 pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateError
@@ -32,6 +36,12 @@ pub(all) struct CreateOptions {
   trackers : Array[Array[String]]
   web_seeds : Array[String]
   comment : String
+}
+
+pub(all) struct PieceSpan {
+  file : Int32
+  offset : Int64
+  length : Int32
 }
 
 pub(all) struct SourceFile {
