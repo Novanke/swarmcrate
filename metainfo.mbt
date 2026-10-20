@@ -187,8 +187,11 @@ pub fn create_torrent(
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
   validate_options(files, options)
-  if options.mode != V1 {
-    reject("mode", "v2/hybrid not available in this build")
+  if options.mode == V2 {
+    return create_v2_torrent(files, options, read)
+  }
+  if options.mode == Hybrid {
+    reject("mode", "hybrid not available in this build")
   }
   let order = sorted_source_indices(files)
   let sorted = order.map(fn(i) { files[i] })
@@ -215,21 +218,22 @@ pub fn create_torrent(
 priv struct ParsedTorrent {
   summary : TorrentInfo
   pieces : Bytes
+  roots : Array[V2FileHash]
 }
 
 ///|
 fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
   let top = decode_bencode(data)
   let info = require_key(top, "info")
+  if lookup(info, "meta version") is Some(_) {
+    return parse_v2_torrent(data, top, info)
+  }
   let name = as_text(require_key(info, "name"))
   let piece = as_int(require_key(info, "piece length"))
   if piece < 16384L || piece > 16777216L {
     reject("piece_length", "invalid piece length")
   }
   check_piece_length(piece.to_int())
-  if lookup(info, "meta version") is Some(_) {
-    reject("mode", "unsupported meta version")
-  }
   let files : Array[SourceFile] = []
   let single = lookup(info, "length") is Some(_)
   if single {
@@ -299,6 +303,7 @@ fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
       info_hash_v2: None,
     },
     pieces,
+    roots: [],
   }
 }
 
@@ -311,4 +316,9 @@ pub fn inspect_torrent(data : Bytes) -> TorrentInfo raise CrateError {
 /// Expose expected v1 piece hashes for verification and integration with other clients.
 pub fn expected_v1_pieces(data : Bytes) -> Bytes raise CrateError {
   parse_torrent(data).pieces
+}
+
+///|
+pub fn expected_v2_files(data : Bytes) -> Array[V2FileHash] raise CrateError {
+  parse_torrent(data).roots
 }
