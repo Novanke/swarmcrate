@@ -14,6 +14,8 @@ pub fn create_torrent(Array[SourceFile], CreateOptions, (Int32, Int64, Int32) ->
 
 pub fn expected_v1_pieces(Bytes) -> Bytes raise CrateError
 
+pub fn hash_v2_file(Int64, Int32, (Int64, Int32) -> Bytes raise CrateError) -> V2FileHash raise CrateError
+
 pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
 
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
@@ -23,6 +25,8 @@ pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes rais
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
 
 pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateError
+
+pub fn validate_piece_layer(Bytes, Int64, Int32, Bytes) -> Unit raise CrateError
 
 pub fn validate_sources(Array[SourceFile]) -> Int64 raise CrateError
 
@@ -77,6 +81,11 @@ pub(all) enum TorrentMode {
 pub fn TorrentMode::equal(Self, Self) -> Bool
 pub fn TorrentMode::not_equal(Self, Self) -> Bool
 pub fn TorrentMode::to_repr(Self) -> @debug.Repr
+
+pub(all) struct V2FileHash {
+  root : Bytes
+  piece_layer : Bytes
+}
 
 // Type aliases
 
