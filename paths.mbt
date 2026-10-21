@@ -180,6 +180,11 @@ pub fn validate_options(
   options : CreateOptions,
 ) -> Unit raise CrateError {
   let total = validate_sources(files)
+  if total == 0L {
+    reject(
+      "empty_payload", "at least one nonempty file is required for interoperable torrents",
+    )
+  }
   check_component(options.name)
   let piece = options.piece_length
   if piece < 16384 || piece > 16777216 || (piece & (piece - 1)) != 0 {

@@ -1,5 +1,21 @@
 ///|
 test "v1 metainfo preserves exact info hash and original callback indices" {
+  for mode in [V1, V2, Hybrid] {
+    assert_true(
+      try {
+        ignore(
+          create_torrent(
+            [{ path: ["empty"], length: 0L, }],
+            { ..create_options("empty"), mode, },
+            fn(_, _, _) { b"" },
+          ),
+        )
+        false
+      } catch {
+        _ => true
+      },
+    )
+  }
   let files : Array[SourceFile] = [
     { path: ["z"], length: 1L, },
     { path: ["a"], length: 3L, },

@@ -181,18 +181,11 @@ fn v1_file_node(file : SourceFile) -> BNode {
 
 ///|
 /// Create deterministic metainfo. Read indices refer to the original unsorted inputs.
-pub fn create_torrent(
+fn create_v1_torrent(
   files : Array[SourceFile],
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
-  validate_options(files, options)
-  if options.mode == V2 {
-    return create_v2_torrent(files, options, read)
-  }
-  if options.mode == Hybrid {
-    return create_hybrid_torrent(files, options, read)
-  }
   let order = sorted_source_indices(files)
   let sorted = order.map(fn(i) { files[i] })
   let pieces = sha1_pieces(sorted, options.piece_length, (i, offset, n) => {
@@ -335,4 +328,21 @@ pub fn torrent_storage_bytes(data : Bytes) -> Int64 raise CrateError {
     total += entry.length
   }
   total
+}
+
+///|
+/// Produce only metadata accepted by this library's full syntax and layout checks.
+pub fn create_torrent(
+  files : Array[SourceFile],
+  options : CreateOptions,
+  read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+) -> Bytes raise CrateError {
+  validate_options(files, options)
+  let data = match options.mode {
+    V1 => create_v1_torrent(files, options, read)
+    V2 => create_v2_torrent(files, options, read)
+    Hybrid => create_hybrid_torrent(files, options, read)
+  }
+  ignore(inspect_torrent(data))
+  data
 }
