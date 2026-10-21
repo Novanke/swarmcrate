@@ -1,0 +1,11 @@
+# Direction and related work — 2026-10-21
+
+SwarmCrate handles offline file-distribution metadata and payload verification. The author's existing public repositories checked on this date were `Novanke/quireloom` (booklet imposition/page ordering) and `Novanke/moonmorph` (JSON migration). They address different inputs, outputs and implementations; their domain code is not reused here.
+
+The Mooncakes registry index updated on this date and public web/GitHub searches were checked for torrent/metainfo/BEP 52/Merkle and the project name. A related public package, `2515050243qyf/moon_bencode@0.2.0`, provides the underlying serialization primitive. SwarmCrate independently implements its bounded codec so it can retain exact info byte spans; it does not copy or depend on that implementation. No complete MoonBit v1/v2/hybrid metainfo creator plus real-payload verifier was found in the checked public index. GitHub confirmed `Novanke/swarmcrate` was available when creating this repository.
+
+Other candidate directions were rejected after public ecosystem checks found existing subtitle, snapshot/backup, font, gettext, MIME/mailbox, WARC, vCard and GPX packages. The public [OSC 2026 results](https://moonbitlang.github.io/OSC2026/) are only a partial view of contest work. These checks cannot establish the contents of every private, unpublished or unindexed historical submission, so no universal non-duplication guarantee is made.
+
+Mature tools such as [libtorrent](https://libtorrent.org/) and [torf](https://github.com/rndusr/torf) already solve related BitTorrent tasks in other ecosystems. The contribution is a reusable MoonBit implementation, portable core API, bounded local workflow, and independently checked outputs, not a new protocol or cryptographic primitive.
+
+Standards: [BEP 3](https://www.bittorrent.org/beps/bep_0003.html), [BEP 52](https://www.bittorrent.org/beps/bep_0052.html), [BEP 47](https://www.bittorrent.org/beps/bep_0047.html), [BEP 9](https://www.bittorrent.org/beps/bep_0009.html). OS bridge API: [Node.js process](https://nodejs.org/api/process.html#processgetbuiltinmoduleid) and [filesystem](https://nodejs.org/api/fs.html). Algorithms are implemented from public specifications; SHA primitives are an attributed official MoonBit dependency.

@@ -1,5 +1,7 @@
 # Project Agents.md Guide
 
+For completed functionality updates used in review, follow `docs/releasing.md` and publish a new tested Mooncakes version. Do not count dependencies, generated interfaces, tests or documentation as effective implementation. Preserve meaningful development history, never add empty/contrived commits. Keep personal application information and all authentication files outside this repository.
+
 This is a [MoonBit](https://docs.moonbitlang.com) project.
 
 You can browse and install extra skills here:
