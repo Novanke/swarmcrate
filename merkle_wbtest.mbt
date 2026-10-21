@@ -1,5 +1,13 @@
 ///|
 test "v2 Merkle roots use zero hashes not zero-filled block hashes" {
+  assert_true(
+    try {
+      ignore(hash_v2_file(9223372036854775807L, 16384, fn(_, _) { b"" }))
+      false
+    } catch {
+      _ => true
+    },
+  )
   for size in [0, 1, 16383, 16384, 16385, 32768, 32769, 65537] {
     let data = Bytes::makei(size, fn(i) { (i % 251).to_byte() })
     for piece in [16384, 32768, 65536] {

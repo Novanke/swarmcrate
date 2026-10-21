@@ -1,5 +1,19 @@
 ///|
 test "portable file sets reject traversal collisions devices and overflow" {
+  for
+    url in [
+      "https://@/announce", "https://:80/a", "http:///a", "https://host/#fragment",
+      "https://host\\evil/a",
+    ] {
+    assert_true(
+      try {
+        check_url(url, true)
+        false
+      } catch {
+        _ => true
+      },
+    )
+  }
   let files : Array[SourceFile] = [
     { path: ["z"], length: 1L, },
     { path: ["目录", "a"], length: 2L, },

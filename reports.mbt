@@ -164,11 +164,11 @@ pub fn verification_html(
     })
     pieces.push(
       "<tr><td>" +
-      failure.scheme +
+      html_escape(failure.scheme) +
       "</td><td>" +
       failure.piece.to_string() +
       "</td><td>" +
-      failure.reason +
+      html_escape(failure.reason) +
       "</td><td>" +
       locations.join("<br>") +
       "</td></tr>",

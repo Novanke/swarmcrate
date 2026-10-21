@@ -39,6 +39,14 @@ fn v2_components(
   let tree = bn(Dictionary([]))
   let layers : Array[(Bytes, BNode)] = []
   let seen : Map[String, Bool] = Map([])
+  let mut count = 0L
+  for file in files {
+    count += (file.length + options.piece_length.to_int64() - 1L) /
+      options.piece_length.to_int64()
+  }
+  if count > 400000L {
+    reject("limit", "too many file pieces")
+  }
   for index in sorted_source_indices(files) {
     let file = files[index]
     let hashes = hash_v2_file(file.length, options.piece_length, (offset, n) => {
@@ -169,6 +177,13 @@ fn parse_v2_torrent(
   }
   validate_options(files, options)
   let layers = dict_pairs(require_key(top, "piece layers"))
+  let layer_map : Map[String, Bytes] = Map([])
+  for (key, value) in layers {
+    if key.length() != 32 {
+      reject("piece_layers", "piece layer key must be 32 bytes")
+    }
+    layer_map.set(@crypto.bytes_to_hex_string(key), as_blob(value))
+  }
   let used : Map[String, Bool] = Map([])
   let hashes : Array[V2FileHash] = []
   let mut count = 0L
@@ -179,16 +194,13 @@ fn parse_v2_torrent(
     }
     let mut layer = b""
     if file.length > piece {
-      let mut found = false
-      for (key, value) in layers {
-        if key == roots[i] {
-          found = true
-          layer = as_blob(value)
-          used.set(@crypto.bytes_to_hex_string(key), true)
+      let key = @crypto.bytes_to_hex_string(roots[i])
+      match layer_map.get(key) {
+        Some(value) => {
+          layer = value
+          used.set(key, true)
         }
-      }
-      if !found {
-        reject("piece_layers", "missing file piece layer")
+        None => reject("piece_layers", "missing file piece layer")
       }
       validate_piece_layer(roots[i], file.length, piece.to_int(), layer)
     }

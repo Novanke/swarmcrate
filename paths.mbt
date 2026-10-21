@@ -154,7 +154,19 @@ fn check_url(url : String, tracker : Bool) -> Unit raise CrateError {
     }
   }
   let rest = url.split_once("://").unwrap().1.to_owned()
+  let authority = rest
+    .split("/")
+    .next()
+    .unwrap_or("")
+    .split("?")
+    .next()
+    .unwrap_or("")
   if rest.is_empty() ||
+    authority.is_empty() ||
+    authority.contains("@") ||
+    authority.has_prefix(":") ||
+    rest.contains("#") ||
+    rest.contains("\\") ||
     rest.has_prefix("/") ||
     rest.has_prefix("?") ||
     rest.has_prefix("#") {

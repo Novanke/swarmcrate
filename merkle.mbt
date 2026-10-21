@@ -68,6 +68,7 @@ pub fn hash_v2_file(
 ) -> V2FileHash raise CrateError {
   check_piece_length(piece_length)
   if length < 0L ||
+    length > 9007199254740991L ||
     (length + piece_length.to_int64() - 1L) / piece_length.to_int64() > 400000L {
     reject("limit", "invalid file length or too many pieces")
   }
