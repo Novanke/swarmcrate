@@ -18,12 +18,13 @@ Each implementation milestone below contains executable MoonBit behavior and its
 | `32aff5a` | Lossless JSON and self-contained offline HTML verification reports. |
 | `11f1661` | Working create/inspect/verify/magnet/edit commands and exit statuses. |
 | `b95cdb6` | Checked v2 length arithmetic, indexed piece layers, URL/report hardening. |
+| `e84b87b` | Reject empty-only payloads for client compatibility; validate every generated result before returning it. |
 
 The later interoperability, CI and documentation commits are additional evidence, not required to make this list exceed ten. Whether a milestone meets a competition's definition of an effective commit is for its reviewers to decide.
 
 ## Source measurement
 
-`python scripts/source_audit.py` currently reports 11 root implementation files, 1,990 nonblank/non-comment code lines, and 1,260 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
+`python scripts/source_audit.py` currently reports 11 root implementation files, 2,002 nonblank/non-comment code lines, and 1,265 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
 
 ## Executed verification
 
