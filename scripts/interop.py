@@ -103,6 +103,68 @@ def libtorrent_reference(payload, mode, piece, output):
     assert report["ok"], report
 
 
+def selected_verification(directory, bundle, mode):
+    global checks
+    torrent = directory / f"selected-{mode}.torrent"
+    command("create", bundle, torrent, "--mode", mode, "--piece-length", "16384")
+    # This metadata is also accepted by an independent implementation.
+    lt.torrent_info(lt.bdecode(torrent.read_bytes()))
+    summary = json.loads(command("inspect", torrent))
+    names = ["/".join(f["path"]) for f in summary["files"]]
+    total = json.loads(command("verify", torrent, bundle))["checked_pieces"]
+    html = directory / f"partial-{mode}.html"
+    report = json.loads(command("verify", torrent, bundle, "--file", "a.bin", "--file", "a.bin", "--html", html))
+    assert report["schema"] == "swarmcrate.verify.v2"
+    assert report["ok"] and not report["complete"]
+    assert report["selected_files"] == [names.index("a.bin")]
+    expected_required = [names.index("a.bin"), names.index("b.bin")] if mode == "v1" else [names.index("a.bin")]
+    assert report["required_files"] == expected_required
+    assert report["checked_pieces"] + report["skipped_pieces"] == total
+    assert "PARTIAL PASS" in html.read_text(encoding="utf-8")
+    checks += 1
+    # A selected v1 boundary needs the neighbour's bytes; v2/hybrid do not.
+    neighbour = bundle / "b.bin"
+    saved = neighbour.read_bytes()
+    neighbour.unlink()
+    try:
+        report = json.loads(command("verify", torrent, bundle, "--file", "a.bin", code=2 if mode == "v1" else 0))
+        assert report["ok"] == (mode != "v1")
+        if mode == "v1":
+            assert report["unreadable_pieces"] == 1
+            assert report["file_issues"][0]["path"] == "b.bin"
+    finally:
+        neighbour.write_bytes(saved)
+    checks += 1
+    # Damage outside the selected pieces does not fail a subset or disappear from a full check.
+    unrelated = bundle / "c.bin"
+    saved = unrelated.read_bytes()
+    damaged = bytearray(saved)
+    damaged[0] ^= 0xFF
+    unrelated.write_bytes(damaged)
+    try:
+        assert json.loads(command("verify", torrent, bundle, "--file", "a.bin"))["ok"]
+        assert not json.loads(command("verify", torrent, bundle, "--file", "c.bin", code=2))["ok"]
+        assert not json.loads(command("verify", torrent, bundle, code=2))["ok"]
+    finally:
+        unrelated.write_bytes(saved)
+    checks += 1
+    empty = bundle / "empty"
+    empty.unlink()
+    try:
+        report = json.loads(command("verify", torrent, bundle, "--file", "empty", code=2))
+        assert not report["ok"] and not report["complete"] and report["checked_pieces"] == 0
+        assert report["file_issues"][0]["path"] == "empty"
+    finally:
+        empty.write_bytes(b"")
+    checks += 1
+    command("verify", torrent, bundle, "--file", "../not-a-file", code=1)
+    selection = [part for name in reversed(names) for part in ("--file", name)]
+    report = json.loads(command("verify", torrent, bundle, *selection))
+    assert report["ok"] and report["complete"] and report["skipped_pieces"] == 0
+    assert report["checked_pieces"] == total
+    checks += 1
+
+
 with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     directory = Path(temp)
     rng = random.Random(20261021)
@@ -156,5 +218,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     invalid.write_bytes(lt.bencode(valid))
     command("inspect", invalid, code=1)
     checks += 1
+    for mode in ["v1", "v2", "hybrid"]:
+        selected_verification(directory, bundle, mode)
 
 print(json.dumps({"result": "PASS", "real_file_scenarios": checks, "libtorrent": lt.__version__, "torf": torf.__version__}))

@@ -38,11 +38,11 @@ jobs:
           moon check --target wasm-gc --deny-warn
           moon test --target wasm-gc --deny-warn
           moon test --target js --deny-warn
-          moon build --target js --deny-warn
+          moon build --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
           python scripts/source_audit.py
       - name: Independent interoperability and real-file scenarios
         run: |
           python -m pip install libtorrent==2.1.1 torf==4.3.1
-          python scripts/interop.py
+          python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js

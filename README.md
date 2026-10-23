@@ -49,14 +49,16 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 
 ```sh
 node scripts/demo.mjs
+# 再次演示时选择新的输出目录
+node scripts/demo.mjs --output ./artifacts/demo-0.2.0
 ```
 
-会在 `artifacts/demo/` 生成演示文件、三种格式种子、正确与损坏核验报告。该目录不纳入源码统计或发布包。演示会使用新的临时工作区，不改动用户文件。
+默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告，以及指定文件的局部校验报告；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
 
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.1.0
+moon add Novanke/swarmcrate@0.2.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -96,15 +98,15 @@ moon fmt --check
 moon info
 moon test --target wasm-gc --deny-warn
 moon test --target js --deny-warn
-moon build --target js --deny-warn
+moon build --target js --release --deny-warn
 python scripts/source_audit.py
 python -m pip install libtorrent==2.1.1 torf==4.3.1
-python scripts/interop.py
+python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 ```
 
-当前有 **11 个核心测试块**，JS 加文件系统/CLI 测试共 **13 个测试块**。独立互操作脚本通过 **67 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接和编辑保持身份。
+当前有 **14 个核心测试块**，JS 加文件系统/CLI 测试共 **17 个测试块**。独立互操作脚本通过 **82 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份，以及三种格式的局部校验、边界依赖和空文件检查。
 
-仅根目录自写库代码：**2,002 行非空非注释源码，1,265 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI 和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)。
+仅根目录自写库代码：**2,163 行非空非注释源码，1,362 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI 和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，0.2.0 的接口变化见 [更新记录](CHANGELOG.md)。
 
 ## 范围和资源边界
 
@@ -118,4 +120,4 @@ python scripts/interop.py
 
 功能与作者已有的 QuireLoom 拼版库、moonmorph JSON 迁移工具不同；公开生态检索范围与相关项目见 [方向核对记录](docs/ecosystem-check.md)。代码、测试和文档由 AI 辅助编写并执行验证，使用前可依据源码和复现步骤审阅。
 
-Apache-2.0，见 [LICENSE](LICENSE)。后续供评审使用的功能更新须同步发布 Mooncakes 新版本，见 [发布流程](docs/releasing.md)。
+Apache-2.0，见 [LICENSE](LICENSE) 和 [依赖与来源说明](THIRD_PARTY.md)。后续供评审使用的功能更新须同步发布 Mooncakes 新版本，见 [发布流程](docs/releasing.md)。
