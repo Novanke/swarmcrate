@@ -18,7 +18,9 @@ pub(all) struct PieceFailure {
 ///|
 pub(all) struct VerificationReport {
   ok : Bool
+  scope : VerificationScope
   checked_pieces : Int32
+  skipped_pieces : Int32
   failed_pieces : Int32
   unreadable_pieces : Int32
   file_issues : Array[FileIssue]
@@ -29,6 +31,7 @@ pub(all) struct VerificationReport {
 ///|
 priv struct VerifyState {
   mut checked : Int32
+  mut skipped : Int32
   mut failed : Int32
   mut unreadable : Int32
   failures : Array[PieceFailure]
@@ -68,6 +71,7 @@ fn record_piece(
 ///|
 fn verify_v1(
   parsed : ParsedTorrent,
+  selected : Array[Bool],
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   state : VerifyState,
@@ -88,37 +92,44 @@ fn verify_v1(
         piece_length - used
       }
       let size = if size > 1048576 { 1048576 } else { size }
-      let valid_size = entry.padding ||
-        lengths[entry.source] == Some(parsed.summary.files[entry.source].length)
-      let data = if entry.padding || !valid_size {
-        Bytes::make(size, 0)
-      } else {
-        read_exact(read, entry.source, offset, size) catch {
-          _ => {
-            readable = false
-            Bytes::make(size, 0)
+      if selected[piece] {
+        let valid_size = entry.padding ||
+          lengths[entry.source] ==
+          Some(parsed.summary.files[entry.source].length)
+        let data = if entry.padding || !valid_size {
+          Bytes::make(size, 0)
+        } else {
+          read_exact(read, entry.source, offset, size) catch {
+            _ => {
+              readable = false
+              Bytes::make(size, 0)
+            }
           }
         }
+        if !valid_size {
+          readable = false
+        }
+        if !entry.padding {
+          spans.push({ file: entry.source, offset, length: size, })
+        }
+        buffer.blit_from_bytes(used, data, 0, size)
       }
-      if !valid_size {
-        readable = false
-      }
-      if !entry.padding {
-        spans.push({ file: entry.source, offset, length: size, })
-      }
-      buffer.blit_from_bytes(used, data, 0, size)
       used += size
       offset += size.to_int64()
       if used == piece_length {
-        let actual = Bytes::from_array(@crypto.sha1(buffer)[:])
-        record_piece(
-          state,
-          "sha1",
-          piece,
-          spans,
-          actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
-          readable,
-        )
+        if selected[piece] {
+          let actual = Bytes::from_array(@crypto.sha1(buffer)[:])
+          record_piece(
+            state,
+            "sha1",
+            piece,
+            spans,
+            actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
+            readable,
+          )
+        } else {
+          state.skipped += 1
+        }
         spans.clear()
         used = 0
         piece += 1
@@ -127,23 +138,28 @@ fn verify_v1(
     }
   }
   if used > 0 {
-    let actual = Bytes::from_array(
-      @crypto.sha1(Bytes::from_array(buffer[0:used]))[:],
-    )
-    record_piece(
-      state,
-      "sha1",
-      piece,
-      spans,
-      actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
-      readable,
-    )
+    if selected[piece] {
+      let actual = Bytes::from_array(
+        @crypto.sha1(Bytes::from_array(buffer[0:used]))[:],
+      )
+      record_piece(
+        state,
+        "sha1",
+        piece,
+        spans,
+        actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
+        readable,
+      )
+    } else {
+      state.skipped += 1
+    }
   }
 }
 
 ///|
 fn verify_v2(
   parsed : ParsedTorrent,
+  selected : Array[Bool],
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   state : VerifyState,
@@ -154,6 +170,10 @@ fn verify_v2(
       continue
     }
     let count = ((file.length + piece.to_int64() - 1L) / piece.to_int64()).to_int()
+    if !selected[index] {
+      state.skipped += count
+      continue
+    }
     for p in 0..<count {
       let offset = p.to_int64() * piece.to_int64()
       let length = if file.length - offset < piece.to_int64() {
@@ -200,15 +220,18 @@ pub fn verify_payload(
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   detail_limit~ : Int32 = 4096,
+  selected_files~ : Array[Int32]? = None,
 ) -> VerificationReport raise CrateError {
   let parsed = parse_torrent(torrent)
+  let plan = plan_verification(parsed, selected_files)
   if lengths.length() != parsed.summary.files.length() ||
     detail_limit < 1 ||
     detail_limit > 10000 {
     reject("verify", "file size mapping or detail limit is invalid")
   }
   let issues : Array[FileIssue] = []
-  for i, file in parsed.summary.files {
+  for i in plan.scope.required_files {
+    let file = parsed.summary.files[i]
     if lengths[i] != Some(file.length) {
       issues.push({
         file: i,
@@ -225,20 +248,23 @@ pub fn verify_payload(
   }
   let state : VerifyState = {
     checked: 0,
+    skipped: 0,
     failed: 0,
     unreadable: 0,
     failures: [],
     limit: detail_limit,
   }
   if parsed.summary.mode != V2 {
-    verify_v1(parsed, lengths, read, state)
+    verify_v1(parsed, plan.v1_pieces, lengths, read, state)
   }
   if parsed.summary.mode != V1 {
-    verify_v2(parsed, lengths, read, state)
+    verify_v2(parsed, plan.selected, lengths, read, state)
   }
   {
     ok: state.failed == 0 && issues.is_empty(),
+    scope: plan.scope,
     checked_pieces: state.checked,
+    skipped_pieces: state.skipped,
     failed_pieces: state.failed,
     unreadable_pieces: state.unreadable,
     file_issues: issues,

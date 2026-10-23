@@ -15,7 +15,9 @@ test "reports escape untrusted paths and serialize sizes losslessly" {
   }
   let report : VerificationReport = {
     ok: false,
+    scope: { complete: true, selected_files: [0], required_files: [0], },
     checked_pieces: 0,
+    skipped_pieces: 0,
     failed_pieces: 0,
     unreadable_pieces: 0,
     file_issues: [
@@ -35,4 +37,18 @@ test "reports escape untrusted paths and serialize sizes losslessly" {
   let html = verification_html(info, report)
   assert_true(!html.contains("<script>"))
   assert_true(html.contains("&lt;script&gt;&amp;&#39;"))
+  let partial : VerificationReport = {
+    ..report,
+    ok: true,
+    scope: { complete: false, selected_files: [0], required_files: [0], },
+    skipped_pieces: 2,
+    file_issues: [],
+  }
+  assert_true(verification_html(info, partial).contains("PARTIAL PASS"))
+  assert_true(
+    verification_html(info, partial).contains("other files are not certified"),
+  )
+  let json = verification_json(partial).stringify()
+  assert_true(json.contains("\"complete\":false"))
+  assert_true(json.contains("\"skipped_pieces\":2"))
 }

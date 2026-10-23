@@ -56,7 +56,10 @@ fn parse_args(
         fail("unknown option or missing value: " + arg)
       }
       let list = values.get_or_init(arg, fn() { [] })
-      if !list.is_empty() && arg != "--tracker" && arg != "--web-seed" {
+      if !list.is_empty() &&
+        arg != "--tracker" &&
+        arg != "--web-seed" &&
+        arg != "--file" {
         fail("duplicate option: " + arg)
       }
       i += 1
@@ -158,6 +161,25 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
   let torrent = @host.read_metainfo(args.positionals[0])
   let info = @lib.inspect_torrent(torrent)
   let root = args.positionals[1]
+  let names = many(args, "--file")
+  let selected : Array[Int32]? = if names.is_empty() {
+    None
+  } else {
+    let indices : Array[Int32] = []
+    let by_path : Map[String, Int32] = Map([])
+    for i, file in info.files {
+      by_path[file.path.join("/")] = i
+    }
+    for name in names {
+      match by_path.get(name) {
+        Some(i) => indices.push(i)
+        None =>
+          fail("--file must exactly match an inspected relative path: " + name)
+      }
+    }
+    Some(indices)
+  }
+  let scope = @lib.verification_scope(torrent, selected_files=selected)
   let paths = info.files.map(fn(f) {
     if info.single_file {
       root
@@ -165,16 +187,21 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
       root + "/" + f.path.join("/")
     }
   })
-  let stats : Array[@host.FileStat] = []
-  let sizes : Array[Int64?] = []
-  for path in paths {
-    let stat = @host.stat(path)
-    stats.push(stat)
-    sizes.push(if stat.kind == "file" { Some(stat.length) } else { None })
+  let stats : Array[@host.FileStat?] = Array::make(paths.length(), None)
+  let sizes : Array[Int64?] = Array::make(paths.length(), None)
+  for i in scope.required_files {
+    let stat = @host.stat(paths[i])
+    stats[i] = Some(stat)
+    sizes[i] = if stat.kind == "file" { Some(stat.length) } else { None }
   }
-  let report = @lib.verify_payload(torrent, sizes, (i, offset, n) => {
-    @host.read_range(paths[i], offset, n, stamp=stats[i].stamp)
-  })
+  let report = @lib.verify_payload(
+    torrent,
+    sizes,
+    (i, offset, n) => {
+      @host.read_range(paths[i], offset, n, stamp=stats[i].unwrap().stamp)
+    },
+    selected_files=selected,
+  )
   let html = one(args, "--html", "")
   if html != "" {
     @host.write_new(html, @utf8.encode(@lib.verification_html(info, report)))
@@ -196,9 +223,10 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
       code: 0,
       output: "SwarmCrate 0.1.0 — offline BitTorrent metadata and payload verification\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
-      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--html REPORT.html]\n" +
+      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--html REPORT.html]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
+      "--file selects exact inspected paths (use /). V1 shared boundary pieces can require neighbour files. Partial success is not a full-payload certificate.\n" +
       "Outputs are new files; existing files are never overwritten. Exit: 0 success, 1 input/I/O error, 2 failed verification.\n" +
       "Core library: Wasm GC and JS. Filesystem CLI: Node.js >=22.16. No network operations.",
     }
@@ -214,7 +242,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
           true,
         ),
       )
-    "verify" => verify(parse_args(args, ["--html"], false))
+    "verify" => verify(parse_args(args, ["--html", "--file"], false))
     "inspect" | "magnet" => {
       let parsed = parse_args(args, [], false)
       arity(parsed, 1)

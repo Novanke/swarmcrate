@@ -50,7 +50,9 @@ pub fn verification_html(TorrentInfo, VerificationReport) -> String
 
 pub fn verification_json(VerificationReport) -> Json
 
-pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32) -> VerificationReport raise CrateError
+pub fn verification_scope(Bytes, selected_files? : Array[Int32]?) -> VerificationScope raise CrateError
+
+pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> VerificationReport raise CrateError
 
 // Errors
 pub(all) suberror CrateError {
@@ -133,12 +135,20 @@ pub(all) struct V2FileHash {
 
 pub(all) struct VerificationReport {
   ok : Bool
+  scope : VerificationScope
   checked_pieces : Int32
+  skipped_pieces : Int32
   failed_pieces : Int32
   unreadable_pieces : Int32
   file_issues : Array[FileIssue]
   failures : Array[PieceFailure]
   details_truncated : Bool
+}
+
+pub(all) struct VerificationScope {
+  complete : Bool
+  selected_files : Array[Int32]
+  required_files : Array[Int32]
 }
 
 // Type aliases

@@ -35,6 +35,14 @@ node scripts/swarmcrate.mjs edit ./release.torrent ./release-new.torrent --track
 
 `create` 输出 JSON，包含真实输出文件、内容标识和磁力链接。`verify` 输出逐片核验 JSON，可同时生成不依赖网络、脚本和外部样式的 HTML 报告。返回码 **0** 表示成功，**1** 表示输入或 I/O 错误，**2** 表示核验失败。损坏报告中的分片索引和文件偏移从零开始。
 
+只复核资料包中的指定文件（可重复 `--file`，路径与 `inspect` 一致）：
+
+```sh
+node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manual.pdf --html ./manual-check.html
+```
+
+局部成功在 HTML 中标记为 **PARTIAL PASS**，JSON 的 `complete=false`，不能作为整个资料包通过的证明。v1 跨文件分片还需要相邻文件的部分字节；`required_files` 列出这些依赖。其他分片跳过读取和哈希；不指定 `--file` 则检查全部文件。v2 单片读取失败仅影响该片，后续分片仍会检查。
+
 单文件种子的 `PAYLOAD` 参数直接指向文件；多文件种子指向包含元数据所列相对路径的目录，不额外拼接种子名称。输出必须是新文件，CLI 不覆盖已有文件。`edit` 用所给参数**整体替换** Tracker 和 Web Seed 列表；修改后保留原始 `info` 字节，内容哈希不会改变。
 
 可重复的完整演示：

@@ -60,9 +60,23 @@ pub fn info_json(info : TorrentInfo) -> Json {
 ///|
 pub fn verification_json(report : VerificationReport) -> Json {
   j_object([
-    ("schema", Json::string("swarmcrate.verify.v1")),
+    ("schema", Json::string("swarmcrate.verify.v2")),
     ("ok", Json::boolean(report.ok)),
+    ("complete", Json::boolean(report.scope.complete)),
+    (
+      "selected_files",
+      Json::array(
+        report.scope.selected_files.map(fn(i) { Json::number(i.to_double()) }),
+      ),
+    ),
+    (
+      "required_files",
+      Json::array(
+        report.scope.required_files.map(fn(i) { Json::number(i.to_double()) }),
+      ),
+    ),
     ("checked_pieces", Json::number(report.checked_pieces.to_double())),
+    ("skipped_pieces", Json::number(report.skipped_pieces.to_double())),
     ("failed_pieces", Json::number(report.failed_pieces.to_double())),
     ("unreadable_pieces", Json::number(report.unreadable_pieces.to_double())),
     ("details_truncated", Json::boolean(report.details_truncated)),
@@ -174,7 +188,19 @@ pub fn verification_html(
       "</td></tr>",
     )
   }
-  let status = if report.ok { "PASS" } else { "FAIL" }
+  let status = if !report.ok {
+    "FAIL"
+  } else if report.scope.complete {
+    "PASS"
+  } else {
+    "PARTIAL PASS"
+  }
+  let selected = report.scope.selected_files
+    .map(fn(i) { html_escape(info.files[i].path.join("/")) })
+    .join("<br>")
+  let required = report.scope.required_files
+    .map(fn(i) { html_escape(info.files[i].path.join("/")) })
+    .join("<br>")
   "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>SwarmCrate verification</title>" +
   "<style>body{font:16px system-ui;max-width:1100px;margin:3rem auto;padding:0 1rem;color:#172533;background:#fafbfc}table{border-collapse:collapse;width:100%;margin:1rem 0}td,th{border:1px solid #ccd3db;padding:.6rem;text-align:left;overflow-wrap:anywhere}h1{color:#164e63}code{overflow-wrap:anywhere}small{color:#52616d}</style>" +
   "<h1>" +
@@ -189,7 +215,20 @@ pub fn verification_html(
   report.failed_pieces.to_string() +
   " · Unreadable: " +
   report.unreadable_pieces.to_string() +
+  " · Skipped: " +
+  report.skipped_pieces.to_string() +
   "</p>" +
+  "<p>Scope: " +
+  (if report.scope.complete {
+    "all files"
+  } else {
+    "selected files only; other files are not certified"
+  }) +
+  "</p><details><summary>Selected files</summary>" +
+  selected +
+  "</details><details><summary>Required files (includes shared v1 boundaries)</summary>" +
+  required +
+  "</details>" +
   "<p>SHA-1: <code>" +
   html_escape(info.info_hash_v1.unwrap_or("—")) +
   "</code><br>SHA-256: <code>" +
