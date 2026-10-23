@@ -34,23 +34,74 @@ fn read_exact(
 }
 
 ///|
+priv struct Sha1Pieces {
+  buffer : FixedArray[Byte]
+  mut used : Int32
+  hashes : Array[Byte]
+}
+
+///|
+fn new_sha1_pieces(piece_length : Int32) -> Sha1Pieces raise CrateError {
+  check_piece_length(piece_length)
+  { buffer: FixedArray::make(piece_length, 0), used: 0, hashes: [], }
+}
+
+///|
+fn flush_sha1(state : Sha1Pieces, padded : Bool) -> Unit raise CrateError {
+  if state.used == 0 {
+    return
+  }
+  let hash = if padded {
+    for i in state.used..<state.buffer.length() {
+      state.buffer[i] = 0
+    }
+    Bytes::from_array(@crypto.sha1(state.buffer)[:])
+  } else {
+    Bytes::from_array(
+      @crypto.sha1(Bytes::from_array(state.buffer[0:state.used]))[:],
+    )
+  }
+  if state.hashes.length() / 20 >= 400000 {
+    reject("limit", "too many pieces")
+  }
+  append_bytes(state.hashes, hash)
+  state.used = 0
+}
+
+///|
+fn push_sha1(state : Sha1Pieces, data : Bytes) -> Unit raise CrateError {
+  let mut offset = 0
+  while offset < data.length() {
+    let capacity = state.buffer.length() - state.used
+    let n = if data.length() - offset < capacity {
+      data.length() - offset
+    } else {
+      capacity
+    }
+    state.buffer.blit_from_bytes(state.used, data, offset, n)
+    state.used += n
+    offset += n
+    if state.used == state.buffer.length() {
+      flush_sha1(state, true)
+    }
+  }
+}
+
+///|
 fn v1_hash_entries(
   entries : Array[DataEntry],
   piece_length : Int32,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
-  check_piece_length(piece_length)
-  let buffer : FixedArray[Byte] = FixedArray::make(piece_length, 0)
-  let result : Array[Byte] = []
-  let mut used = 0
+  let state = new_sha1_pieces(piece_length)
   for entry in entries {
     let mut offset = 0L
     while offset < entry.length {
       let remaining = entry.length - offset
-      let size = if remaining < (piece_length - used).to_int64() {
+      let size = if remaining < (piece_length - state.used).to_int64() {
         remaining.to_int()
       } else {
-        piece_length - used
+        piece_length - state.used
       }
       // Read in at most 1 MiB chunks even when a piece is larger.
       let size = if size > 1048576 { 1048576 } else { size }
@@ -59,23 +110,12 @@ fn v1_hash_entries(
       } else {
         read_exact(read, entry.source, offset, size)
       }
-      buffer.blit_from_bytes(used, data, 0, size)
-      used += size
+      push_sha1(state, data)
       offset += size.to_int64()
-      if used == piece_length {
-        append_bytes(result, Bytes::from_array(@crypto.sha1(buffer)[:]))
-        used = 0
-        if result.length() / 20 > 400000 {
-          reject("limit", "too many pieces")
-        }
-      }
     }
   }
-  if used > 0 {
-    let partial = Bytes::from_array(buffer[0:used])
-    append_bytes(result, Bytes::from_array(@crypto.sha1(partial)[:]))
-  }
-  Bytes::from_array(result)
+  flush_sha1(state, false)
+  Bytes::from_array(state.hashes)
 }
 
 ///|

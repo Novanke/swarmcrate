@@ -5,16 +5,15 @@ fn create_hybrid_torrent(
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
   let order = sorted_source_indices(files)
-  let entries : Array[DataEntry] = []
   let v1_files : Array[BNode] = []
+  let pad_after : Array[Bool] = Array::make(files.length(), false)
   for pos, index in order {
     let file = files[index]
-    entries.push({ source: index, length: file.length, padding: false, })
     v1_files.push(v1_file_node(file))
     let remainder = file.length % options.piece_length.to_int64()
     if pos + 1 < order.length() && remainder != 0L {
       let size = options.piece_length.to_int64() - remainder
-      entries.push({ source: -1, length: size, padding: true, })
+      pad_after[index] = true
       v1_files.push(
         bn_dict([
           ("attr", bn_text("p")),
@@ -24,8 +23,19 @@ fn create_hybrid_torrent(
       )
     }
   }
-  let pieces = v1_hash_entries(entries, options.piece_length, read)
-  let (tree, layers) = v2_components(files, options, read)
+  let sha1 = new_sha1_pieces(options.piece_length)
+  // V2 reads in deterministic file order. Feed the very same real bytes into
+  // SHA-1 and synthesize alignment padding only after a non-final short file.
+  let (tree, layers) = v2_components(files, options, (index, offset, n) => {
+    let data = read_exact(read, index, offset, n)
+    push_sha1(sha1, data)
+    if offset + n.to_int64() == files[index].length && pad_after[index] {
+      flush_sha1(sha1, true)
+    }
+    data
+  })
+  flush_sha1(sha1, false)
+  let pieces = Bytes::from_array(sha1.hashes)
   let fields = [
     ("name", bn_text(options.name)),
     ("piece length", bn_int(options.piece_length.to_int64())),
