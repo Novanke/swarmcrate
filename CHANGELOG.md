@@ -8,6 +8,7 @@
 - Add `recommend_piece_length(files, mode=Hybrid, target_pieces=4096)`. It accounts for separately aligned v2/hybrid files, does not inflate tiny files to chase an impossible target, and enforces the hard piece limit.
 - CLI creation defaults to `--piece-length auto`; explicitly pass the old `262144` default to preserve a previous default layout. The library's `create_options` default remains 256 KiB. Command-level `--help` is available without input paths.
 - Add a reproducible benchmark, 5,000-file tree and non-rewindable-source regressions, larger chunk interoperability cases, design notes and a review evidence map. Verification JSON stays at schema v2; no report fields were removed.
+- Upgrade the Node/Python setup actions to Node 24-compatible versions; keep the tested application runtimes at Node 24 and Python 3.12.
 
 ## 0.2.0 — 2026-10-23
 
