@@ -143,6 +143,24 @@ pub fn stat(path : String) -> FileStat raise @lib.CrateError {
 }
 
 ///|
+/// Detect changes after a file's last read, including empty or missing files.
+/// This is a consistency check for ordinary local edits, not an atomic snapshot.
+pub fn check_unchanged(
+  path : String,
+  before : FileStat,
+) -> Unit raise @lib.CrateError {
+  let after = stat(path)
+  if before.kind != after.kind ||
+    before.length != after.length ||
+    before.stamp != after.stamp {
+    raise @lib.CrateError(
+      "changed",
+      "payload changed before completion: " + path,
+    )
+  }
+}
+
+///|
 pub fn resolve(path : String) -> String raise @lib.CrateError {
   io("resolve", path).text()
 }

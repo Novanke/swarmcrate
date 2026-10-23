@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn check_unchanged(String, FileStat) -> Unit raise @swarmcrate.CrateError
+
 pub fn read_metainfo(String) -> Bytes raise @swarmcrate.CrateError
 
 pub fn read_range(String, Int64, Int32, stamp? : String) -> Bytes raise @swarmcrate.CrateError

@@ -136,9 +136,11 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
   })
   // A final scan catches edits after a source's last block and changes to empty files.
   for source in sources {
-    if @host.stat(source.absolute_path).stamp != source.stamp {
-      raise @lib.CrateError("io", "source changed before output was committed")
-    }
+    @host.check_unchanged(source.absolute_path, {
+      kind: "file",
+      length: source.descriptor.length,
+      stamp: source.stamp,
+    })
   }
   let info = @lib.inspect_torrent(torrent)
   let magnet = @lib.torrent_magnet(torrent)
@@ -202,6 +204,9 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
     },
     selected_files=selected,
   )
+  for i in scope.required_files {
+    @host.check_unchanged(paths[i], stats[i].unwrap())
+  }
   let html = one(args, "--html", "")
   if html != "" {
     @host.write_new(html, @utf8.encode(@lib.verification_html(info, report)))
