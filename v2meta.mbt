@@ -1,33 +1,34 @@
 ///|
 fn insert_file_tree(
   tree : BNode,
+  directories : Map[String, BNode],
   path : Array[String],
-  depth : Int32,
   length : Int64,
   root : Bytes,
 ) -> Unit raise CrateError {
-  let pairs = dict_pairs(tree)
-  if depth == path.length() {
-    if !pairs.is_empty() {
-      reject("path", "file-tree collision")
+  // Source validation already rules out file/directory and duplicate paths.
+  // Index directories by their full path instead of scanning every sibling.
+  let mut parent = tree
+  let mut prefix = ""
+  for depth in 0..<(path.length() - 1) {
+    prefix = if depth == 0 { path[depth] } else { prefix + "/" + path[depth] }
+    let child = match directories.get(prefix) {
+      Some(node) => node
+      None => {
+        let node = bn(Dictionary([]))
+        dict_pairs(parent).push((@utf8.encode(path[depth]), node))
+        directories.set(prefix, node)
+        node
+      }
     }
-    let leaf = [("length", bn_int(length))]
-    if length > 0L {
-      leaf.push(("pieces root", bn(Blob(root))))
-    }
-    pairs.push((b"", bn_dict(leaf)))
-    return
+    parent = child
   }
-  let key = @utf8.encode(path[depth])
-  for (k, child) in pairs {
-    if k == key {
-      insert_file_tree(child, path, depth + 1, length, root)
-      return
-    }
+  let properties = [("length", bn_int(length))]
+  if length > 0L {
+    properties.push(("pieces root", bn(Blob(root))))
   }
-  let child = bn(Dictionary([]))
-  insert_file_tree(child, path, depth + 1, length, root)
-  pairs.push((key, child))
+  let leaf = bn(Dictionary([(b"", bn_dict(properties))]))
+  dict_pairs(parent).push((@utf8.encode(path[path.length() - 1]), leaf))
 }
 
 ///|
@@ -37,6 +38,7 @@ fn v2_components(
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> (BNode, BNode) raise CrateError {
   let tree = bn(Dictionary([]))
+  let directories : Map[String, BNode] = Map([])
   let layers : Array[(Bytes, BNode)] = []
   let seen : Map[String, Bool] = Map([])
   let mut count = 0L
@@ -52,7 +54,7 @@ fn v2_components(
     let hashes = hash_v2_file(file.length, options.piece_length, (offset, n) => {
       read(index, offset, n)
     })
-    insert_file_tree(tree, file.path, 0, file.length, hashes.root)
+    insert_file_tree(tree, directories, file.path, file.length, hashes.root)
     if !hashes.piece_layer.is_empty() {
       let key = @crypto.bytes_to_hex_string(hashes.root)
       if !seen.contains(key) {

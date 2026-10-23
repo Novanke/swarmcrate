@@ -34,3 +34,50 @@ test "v2 file trees deduplicate layers and authenticate all referenced roots" {
     },
   )
 }
+
+///|
+test "large flat and shared-directory trees retain deterministic paths and roots" {
+  for nested in [false, true] {
+    let files = Array::makei(5000, fn(i) {
+      let name = "file-" + i.to_string()
+      SourceFile::{
+        path: if nested {
+          ["资料", (i % 7).to_string(), name]
+        } else {
+          [name]
+        },
+        length: if i == 4999 {
+          1L
+        } else {
+          0L
+        },
+      }
+    })
+    let torrent = create_torrent(
+      files,
+      { ..create_options("many-files"), mode: V2, },
+      fn(_, _, _) { b"x" },
+    )
+    let info = inspect_torrent(torrent)
+    assert_eq(info.files.length(), 5000)
+    let order = sorted_source_indices(files)
+    for i, file in info.files {
+      assert_eq(file.path, files[order[i]].path)
+      assert_eq(file.length, files[order[i]].length)
+    }
+    let reversed = Array::makei(files.length(), fn(i) {
+      files[files.length() - 1 - i]
+    })
+    assert_eq(
+      torrent,
+      create_torrent(reversed, { ..create_options("many-files"), mode: V2, }, fn(
+        _,
+        _,
+        _,
+      ) {
+        b"x"
+      }),
+    )
+    check_bencode(torrent)
+  }
+}
