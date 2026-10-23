@@ -35,6 +35,8 @@ node scripts/swarmcrate.mjs edit ./release.torrent ./release-new.torrent --track
 
 `create` 输出 JSON，包含真实输出文件、内容标识和磁力链接。`verify` 输出逐片核验 JSON，可同时生成不依赖网络、脚本和外部样式的 HTML 报告。返回码 **0** 表示成功，**1** 表示输入或 I/O 错误，**2** 表示核验失败。损坏报告中的分片索引和文件偏移从零开始。
 
+`create` 默认自动选择分片大小，也可显式使用 `--piece-length auto`；选择结果见输出的 `info.piece_length`。目标约 4,096 个分片，同时考虑 v2/混合格式的每文件对齐与硬上限。需要固定布局和内容标识时，传入明确的字节数。`create --help`、`verify --help` 等子命令可直接查看用法。
+
 只复核资料包中的指定文件（可重复 `--file`，路径与 `inspect` 一致）：
 
 ```sh

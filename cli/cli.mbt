@@ -115,10 +115,15 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
       @lib.Hybrid
     }
   }
-  let piece = @string.parse_int(one(args, "--piece-length", "262144")) catch {
-    _ => {
-      fail("invalid --piece-length")
-      0
+  let piece_option = one(args, "--piece-length", "auto")
+  let piece = if piece_option == "auto" {
+    @lib.recommend_piece_length(files, mode~)
+  } else {
+    @string.parse_int(piece_option) catch {
+      _ => {
+        fail("--piece-length must be auto or an integer byte count")
+        0
+      }
     }
   }
   let options : @lib.CreateOptions = {
@@ -223,14 +228,22 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
 
 ///|
 fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
-  if args.is_empty() || ["help", "--help", "-h"].contains(args[0]) {
+  let help_flags = ["help", "--help", "-h"]
+  if args.is_empty() ||
+    help_flags.contains(args[0]) ||
+    (
+      args.length() == 2 &&
+      ["create", "inspect", "magnet", "verify", "edit"].contains(args[0]) &&
+      help_flags.contains(args[1])
+    ) {
     return {
       code: 0,
       output: "SwarmCrate 0.2.0 — offline BitTorrent metadata and payload verification\n" +
-      "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
+      "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--html REPORT.html]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
+      "Create defaults to auto piece sizing (aims for 4096 pieces, accounts for v2/hybrid file alignment). Use an explicit byte count for a fixed layout.\n" +
       "--file selects exact inspected paths (use /). V1 shared boundary pieces can require neighbour files. Partial success is not a full-payload certificate.\n" +
       "Outputs are new files; existing files are never overwritten. Exit: 0 success, 1 input/I/O error, 2 failed verification.\n" +
       "Core library: Wasm GC and JS. Filesystem CLI: Node.js >=22.16. No network operations.",

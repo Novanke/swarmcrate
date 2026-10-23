@@ -59,5 +59,21 @@ test "CLI creates usable files edits endpoints verifies and uses meaningful exit
   assert_eq(execute(["create", "a", "b", "--bad"]).code, 1)
   assert_eq(execute(["verify"]).code, 1)
   assert_eq(execute(["help"]).code, 0)
+  for command in ["create", "inspect", "magnet", "verify", "edit"] {
+    assert_eq(execute([command, "--help"]).code, 0)
+  }
+  let auto = dir + "/auto.torrent"
+  assert_eq(execute(["create", dir + "/input", auto]).code, 0)
+  assert_eq(@lib.inspect_torrent(@host.read_metainfo(auto)).piece_length, 16384)
+  assert_eq(
+    execute([
+      "create",
+      dir + "/input",
+      dir + "/bad.torrent",
+      "--piece-length",
+      "invalid",
+    ]).code,
+    1,
+  )
   cli_cleanup(dir)
 }

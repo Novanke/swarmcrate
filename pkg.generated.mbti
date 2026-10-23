@@ -32,6 +32,8 @@ pub fn parse_magnet(String) -> Magnet raise CrateError
 
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
 
+pub fn recommend_piece_length(Array[SourceFile], mode? : TorrentMode, target_pieces? : Int32) -> Int32 raise CrateError
+
 pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
 
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError

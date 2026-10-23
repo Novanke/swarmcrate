@@ -44,6 +44,55 @@ pub fn create_options(name : String) -> CreateOptions {
 }
 
 ///|
+/// Recommend a power-of-two piece size in 16 KiB..16 MiB. The target is soft;
+/// per-file formats cannot use fewer pieces than their nonempty file count.
+/// Never recommend a size that would exceed the hard 400,000-piece limit.
+pub fn recommend_piece_length(
+  files : Array[SourceFile],
+  mode~ : TorrentMode = Hybrid,
+  target_pieces~ : Int32 = 4096,
+) -> Int32 raise CrateError {
+  let total = validate_sources(files)
+  if total == 0L {
+    reject("empty_payload", "cannot select pieces for an empty payload")
+  }
+  if target_pieces < 1 || target_pieces > 400000 {
+    reject("piece_length", "target pieces must be in 1..400000")
+  }
+  let mut budget = target_pieces.to_int64()
+  if mode != V1 {
+    let mut nonempty = 0L
+    for file in files {
+      if file.length > 0L {
+        nonempty += 1L
+      }
+    }
+    if nonempty > budget {
+      budget = nonempty
+    }
+  }
+  let mut piece = 16384
+  while piece <= 16777216 {
+    let width = piece.to_int64()
+    let count = if mode == V1 {
+      (total + width - 1L) / width
+    } else {
+      let mut sum = 0L
+      for file in files {
+        sum += (file.length + width - 1L) / width
+      }
+      sum
+    }
+    if count <= budget || (piece == 16777216 && count <= 400000L) {
+      return piece
+    }
+    piece *= 2
+  }
+  reject("limit", "payload exceeds the piece limit even at 16 MiB")
+  0
+}
+
+///|
 fn check_component(part : String) -> Unit raise CrateError {
   if part.is_empty() ||
     @utf8.encode(part).length() > 255 ||
