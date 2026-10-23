@@ -59,6 +59,43 @@ fn split_hashes(data : Bytes) -> Array[Bytes] raise CrateError {
 }
 
 ///|
+// Hash a file-local piece. A short final piece in a multi-piece file still
+// occupies a full piece's Merkle width; a one-piece file does not.
+fn hash_v2_piece(
+  length : Int64,
+  piece_length : Int32,
+  offset : Int64,
+  read : (Int64, Int32) -> Bytes raise CrateError,
+) -> Bytes raise CrateError {
+  let end = if length - offset < piece_length.to_int64() {
+    length
+  } else {
+    offset + piece_length.to_int64()
+  }
+  let blocks : Array[Bytes] = []
+  let mut cursor = offset
+  while cursor < end {
+    let size = if end - cursor < 16384L {
+      (end - cursor).to_int()
+    } else {
+      16384
+    }
+    let data = read(cursor, size)
+    if data.length() != size {
+      reject("read", "short or oversized v2 block read")
+    }
+    blocks.push(sha256(data))
+    cursor += size.to_int64()
+  }
+  if length > piece_length.to_int64() {
+    while blocks.length() < piece_length / 16384 {
+      blocks.push(Bytes::make(32, 0))
+    }
+  }
+  merkle_root(blocks, Bytes::make(32, 0))
+}
+
+///|
 /// Hash 16 KiB blocks with BEP 52 zero-hash padding, buffering one piece's hashes.
 /// Empty files have neither pieces root nor piece layer.
 pub fn hash_v2_file(
@@ -78,31 +115,8 @@ pub fn hash_v2_file(
   let pieces : Array[Bytes] = []
   let mut offset = 0L
   while offset < length {
-    let blocks : Array[Bytes] = []
-    let piece_end = if length - offset < piece_length.to_int64() {
-      length
-    } else {
-      offset + piece_length.to_int64()
-    }
-    while offset < piece_end {
-      let size = if piece_end - offset < 16384L {
-        (piece_end - offset).to_int()
-      } else {
-        16384
-      }
-      let data = read(offset, size)
-      if data.length() != size {
-        reject("read", "short or oversized v2 block read")
-      }
-      blocks.push(sha256(data))
-      offset += size.to_int64()
-    }
-    if length > piece_length.to_int64() {
-      while blocks.length() < piece_length / 16384 {
-        blocks.push(Bytes::make(32, 0))
-      }
-    }
-    pieces.push(merkle_root(blocks, Bytes::make(32, 0)))
+    pieces.push(hash_v2_piece(length, piece_length, offset, read))
+    offset += piece_length.to_int64()
   }
   if length <= piece_length.to_int64() {
     { root: pieces[0], piece_layer: b"", }

@@ -153,19 +153,6 @@ fn verify_v2(
     if file.length == 0L {
       continue
     }
-    let mut readable = lengths[index] == Some(file.length)
-    let actual = if readable {
-      Some(
-        hash_v2_file(file.length, piece, (offset, n) => read(index, offset, n)),
-      ) catch {
-        _ => {
-          readable = false
-          None
-        }
-      }
-    } else {
-      None
-    }
     let count = ((file.length + piece.to_int64() - 1L) / piece.to_int64()).to_int()
     for p in 0..<count {
       let offset = p.to_int64() * piece.to_int64()
@@ -174,14 +161,23 @@ fn verify_v2(
       } else {
         piece
       }
+      let actual = if lengths[index] == Some(file.length) {
+        Some(
+          hash_v2_piece(file.length, piece, offset, (o, n) => read(index, o, n)),
+        ) catch {
+          _ => None
+        }
+      } else {
+        None
+      }
       let matches = match actual {
         None => false
         Some(actual) =>
           if count == 1 {
-            actual.root == parsed.roots[index].root
+            actual == parsed.roots[index].root
           } else {
-            actual.piece_layer[p * 32:p * 32 + 32] ==
-            parsed.roots[index].piece_layer[p * 32:p * 32 + 32]
+            actual ==
+            parsed.roots[index].piece_layer[p * 32:p * 32 + 32].to_owned()
           }
       }
       record_piece(
@@ -190,7 +186,7 @@ fn verify_v2(
         p,
         [{ file: index, offset, length, }],
         matches,
-        readable,
+        actual is Some(_),
       )
     }
   }

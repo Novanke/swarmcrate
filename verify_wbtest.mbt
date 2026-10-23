@@ -54,3 +54,48 @@ test "verification catches corruption missing empty files and failures at read b
     assert_true(broken.unreadable_pieces > 0)
   }
 }
+
+///|
+test "a failed v2 block affects only its piece and later pieces are still checked" {
+  let data = Bytes::makei(98305, fn(i) { (i % 251).to_byte() })
+  for mode in [V2, Hybrid] {
+    let torrent = create_torrent(
+      [{ path: ["data"], length: data.length().to_int64(), }],
+      {
+        ..create_options("data"),
+        mode,
+        single_file: true,
+        piece_length: 32768,
+      },
+      fn(_, o, n) { data[o.to_int():o.to_int() + n].to_owned() },
+    )
+    for short_read in [false, true] {
+      let report = verify_payload(torrent, [Some(data.length().to_int64())], fn(
+        _,
+        o,
+        n,
+      ) raise CrateError {
+        if o == 32768L {
+          if short_read {
+            return b""
+          }
+          raise CrateError("io", "unreadable block")
+        }
+        let result = data[o.to_int():o.to_int() + n].to_array()
+        if o == 65536L {
+          result[0] = 255
+        }
+        Bytes::from_array(result)
+      })
+      let multiplier = if mode == Hybrid { 2 } else { 1 }
+      assert_true(!report.ok)
+      assert_eq(report.checked_pieces, 4 * multiplier)
+      assert_eq(report.unreadable_pieces, multiplier)
+      assert_eq(report.failed_pieces, 2 * multiplier)
+      assert_eq(report.failures[0].piece, 1)
+      assert_eq(report.failures[0].reason, "unreadable")
+      assert_eq(report.failures[1].piece, 2)
+      assert_eq(report.failures[1].reason, "hash_mismatch")
+    }
+  }
+}
