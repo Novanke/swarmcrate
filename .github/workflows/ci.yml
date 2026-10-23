@@ -41,6 +41,7 @@ jobs:
           moon build --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
+          node scripts/benchmark.mjs --runs 1
           python scripts/source_audit.py
       - name: Independent interoperability and real-file scenarios
         run: |

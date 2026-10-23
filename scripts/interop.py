@@ -220,5 +220,26 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     checks += 1
     for mode in ["v1", "v2", "hybrid"]:
         selected_verification(directory, bundle, mode)
+    # Chunk batching must not change leaves, final piece padding or file roots.
+    large = directory / "large.bin"
+    large.write_bytes(rng.randbytes(2097169))
+    for piece in [1048576, 2097152, 4194304]:
+        for mode in ["v1", "v2", "hybrid"]:
+            torrent = directory / f"large-{piece}-{mode}.torrent"
+            command("create", large, torrent, "--mode", mode, "--piece-length", piece)
+            independent_check(torrent, large, mode, True)
+    # Automatic policy is explicit in output and reproducible with the chosen size.
+    for mode in ["v1", "v2", "hybrid"]:
+        auto = directory / f"auto-{mode}.torrent"
+        explicit = directory / f"auto-explicit-{mode}.torrent"
+        result = json.loads(command("create", bundle, auto, "--mode", mode))
+        piece = result["info"]["piece_length"]
+        assert piece == 16384
+        command("create", bundle, explicit, "--mode", mode, "--piece-length", piece)
+        assert lt.bdecode(auto.read_bytes())[b"info"] == lt.bdecode(explicit.read_bytes())[b"info"]
+        lt.torrent_info(lt.bdecode(auto.read_bytes()))
+        assert json.loads(command("verify", auto, bundle))["ok"]
+        assert "auto" in command("create", "--help")
+        checks += 1
 
 print(json.dumps({"result": "PASS", "real_file_scenarios": checks, "libtorrent": lt.__version__, "torf": torf.__version__}))
