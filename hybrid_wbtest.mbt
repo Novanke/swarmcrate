@@ -46,7 +46,7 @@ test "hybrid accepts a non-rewindable source and hashes each real byte once" {
       files,
       { ..create_options("stream"), piece_length: piece, },
       fn(i, o, n) raise CrateError {
-        if o != positions[i] || n <= 0 || n > 16384 {
+        if o != positions[i] || n <= 0 || n > 1048576 {
           reject("stream", "cannot rewind or skip input")
         }
         positions[i] += n.to_int64()

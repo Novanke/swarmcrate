@@ -55,3 +55,36 @@ test "v2 Merkle roots use zero hashes not zero-filled block hashes" {
     },
   )
 }
+
+///|
+test "v2 batches bounded reads while retaining 16 KiB Merkle leaves" {
+  let data = Bytes::makei(2097169, fn(i) { (i % 251).to_byte() })
+  for piece in [1048576, 2097152, 4194304] {
+    let mut calls = 0
+    let mut cursor = 0L
+    let hash = hash_v2_file(data.length().to_int64(), piece, fn(
+      o,
+      n,
+    ) raise CrateError {
+      if o != cursor || n <= 0 || n > 1048576 {
+        reject("test", "unbounded or repeated read")
+      }
+      cursor += n.to_int64()
+      calls += 1
+      data[o.to_int():o.to_int() + n].to_owned()
+    })
+    assert_eq(calls, 3)
+    let leaves : Array[Bytes] = []
+    let mut offset = 0
+    while offset < data.length() {
+      let end = if data.length() - offset < 16384 {
+        data.length()
+      } else {
+        offset + 16384
+      }
+      leaves.push(sha256(data[offset:end]))
+      offset = end
+    }
+    assert_eq(hash.root, merkle_root(leaves, Bytes::make(32, 0)))
+  }
+}

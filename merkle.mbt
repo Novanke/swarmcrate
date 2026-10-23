@@ -5,7 +5,7 @@ pub(all) struct V2FileHash {
 }
 
 ///|
-fn sha256(data : Bytes) -> Bytes {
+fn[D : @crypto.ByteSource] sha256(data : D) -> Bytes {
   Bytes::from_array(@crypto.sha256(data)[:])
 }
 
@@ -75,16 +75,23 @@ fn hash_v2_piece(
   let blocks : Array[Bytes] = []
   let mut cursor = offset
   while cursor < end {
-    let size = if end - cursor < 16384L {
+    // Read at most 1 MiB without crossing this piece. Merkle leaves remain
+    // exactly 16 KiB (except the final short block), independent of I/O size.
+    let size = if end - cursor < 1048576L {
       (end - cursor).to_int()
     } else {
-      16384
+      1048576
     }
     let data = read(cursor, size)
     if data.length() != size {
-      reject("read", "short or oversized v2 block read")
+      reject("read", "short or oversized v2 chunk read")
     }
-    blocks.push(sha256(data))
+    let mut block = 0
+    while block < size {
+      let block_end = if size - block < 16384 { size } else { block + 16384 }
+      blocks.push(sha256(data[block:block_end]))
+      block = block_end
+    }
     cursor += size.to_int64()
   }
   if length > piece_length.to_int64() {
