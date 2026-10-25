@@ -30,7 +30,7 @@ jobs:
       - name: Format interfaces and both backends
         shell: bash
         run: |
-          moon version --all
+          python scripts/check_toolchain.py
           moon update
           moon fmt --check
           moon info
@@ -39,6 +39,8 @@ jobs:
           moon test --target wasm-gc --deny-warn
           moon test --target js --deny-warn
           moon build --target js --release --deny-warn
+          moon run examples/library --target wasm-gc --release --deny-warn
+          moon run examples/library --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
           node scripts/benchmark.mjs --runs 1

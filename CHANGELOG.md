@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-10-25
+
+- Read standalone v1 BEP 47 padding as virtual zeros, keeping real callback indices, selected-file scopes and damage spans separate from storage layout. Support omitted/repeated safe padding paths and trailing padding; ordinary files need not all be aligned. Creation of standalone v1 remains unpadded.
+- Validate storage entry counts, padded sizes, alignment and SHA-1 hash counts. Reject unsupported single-file attributes and symlink targets that previously could be ignored. This is an explicitly documented BEP 47 subset, not full extended-attribute support.
+- Add an executable pure MoonBit public-API example on Wasm GC and JS, covering creation, inspection, magnet output, intact verification and deliberate corruption in all three modes.
+- Enforce stable moonc >= 0.10.14 in Windows/Linux CI and document the tested 0.10.16 toolchain. Refresh the evidence map against the entrant-provided final acceptance guide; accepted entrants do not need another application form.
+- Pass 21 core / 24 JS test blocks and 109 independent real-file scenarios, including padded v1 acceptance by libtorrent. No report schema or public API signature changes.
+
 ## 0.3.0 — 2026-10-23
 
 - Hybrid creation reads each real payload byte once, feeds both hash schemes from the same data, and generates alignment zeros internally. Excessive aligned piece counts are rejected before payload I/O, including cases where the unpadded v1 count would fit.

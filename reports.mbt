@@ -240,7 +240,7 @@ pub fn verification_html(
   "<h2>Piece failures</h2><table><tr><th>Scheme</th><th>Index (zero-based)</th><th>Reason</th><th>File @ offset + length</th></tr>" +
   pieces.join("") +
   "</table>" +
-  "<small>SwarmCrate 0.3.0 · Hash checks show consistency with this metainfo, not publisher authenticity. Detail list truncated: " +
+  "<small>SwarmCrate 0.4.0 · Hash checks show consistency with this metainfo, not publisher authenticity. Detail list truncated: " +
   report.details_truncated.to_string() +
   ".</small></html>"
 }

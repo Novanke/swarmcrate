@@ -13,12 +13,13 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 ## 快速使用
 
-安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，并安装 Node.js。克隆后执行：
+安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，要求 **moonc ≥ 0.10.14**，本版验证使用 **0.10.16**；另安装 Node.js 22.16+。CI 会检查编译器版本下限。克隆后执行：
 
 ```sh
 git clone https://github.com/Novanke/swarmcrate.git
 cd swarmcrate
 moon update
+python scripts/check_toolchain.py  # 可选的本机版本检查；需要 Python 3
 moon build --target js --release
 node scripts/swarmcrate.mjs help
 ```
@@ -52,7 +53,7 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.3.0
+node scripts/demo.mjs --output ./artifacts/demo-0.4.0
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告，以及指定文件的局部校验报告；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
@@ -60,7 +61,7 @@ node scripts/demo.mjs --output ./artifacts/demo-0.3.0
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.3.0
+moon add Novanke/swarmcrate@0.4.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -82,11 +83,21 @@ println(@swarm.info_json(summary).stringify(indent=2))
 
 调用方处理 `CrateError(code, detail)`。读取回调必须返回请求的完整字节，创建时的文件索引始终对应输入数组，库内部确定性排序不会改变回调映射。核验时的文件索引对应 `inspect_torrent(...).files`。见 [接口约定](docs/API.md) 和自动生成的 [公开接口](pkg.generated.mbti)。
 
+仓库另有完整、可直接运行的纯 MoonBit 示例，无需准备文件或使用文件系统桥：
+
+```sh
+moon run examples/library --target wasm-gc --release --deny-warn
+moon run examples/library --target js --release --deny-warn
+```
+
+示例依次创建 v1、v2、混合种子，输出元数据、磁力链接和完整核验报告，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
+
 ## 已实现
 
 - 有界、规范 bencode 编解码，保留原始字节区间，拒绝重复/未排序字典键、非规范整数、截断、超深与过大输入。
 - v1 跨文件 SHA-1 分片，v2 16 KiB 区块 Merkle 树、零哈希补齐及认证分片层。
 - v1/v2/混合格式创建与严格读取；混合格式使用虚拟补零，并核对两种格式的路径、顺序、长度和对齐一致性。
+- 读取独立 v1 的 BEP 47 补零条目，以虚拟零字节参与核验，不需要磁盘上的 `.pad` 文件；局部核验和损坏定位始终使用真实文件索引。
 - 所有创建模式只读取一次真实载荷；v2 读取按片边界合并为不超过 1 MiB 的请求，Merkle 叶子仍严格为 16 KiB；多文件树使用目录索引构建。
 - 文件大小、缺失、读取异常、损坏分片及文件偏移报告；混合格式同时核验两套哈希。
 - SHA-1 十六进制/Base32、SHA-256 multihash 磁力链接解析与输出，UTF-8 百分号编码。
@@ -107,17 +118,17 @@ python -m pip install libtorrent==2.1.1 torf==4.3.1
 python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 ```
 
-当前有 **19 个核心测试块**，JS 加文件系统/CLI 测试共 **22 个测试块**。独立互操作脚本通过 **94 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，以及超过 1 MiB 的批量读取与末片补齐。
+当前有 **21 个核心测试块**，JS 加文件系统/CLI 测试共 **24 个测试块**。独立互操作脚本通过 **109 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。
 
-仅根目录自写库代码：**2,252 行非空非注释源码，1,417 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+仅根目录自写库代码：**2,304 行非空非注释源码，1,451 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
 性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 
 ## 范围和资源边界
 
-元数据最大 16 MiB、深度 64、20 万 bencode 节点；文件集合最多 65,536 个文件、32 层路径；总字节数最多 `2^53-1`，分片最多 400,000；分片大小为 16 KiB 至 16 MiB 的二次幂。载荷必须至少包含一个非空文件，可以同时包含空文件。哈希按块/片读取，不把整个载荷装入内存。元数据、分片哈希和有界诊断保存在内存中。
+元数据最大 16 MiB、深度 64、20 万 bencode 节点；真实文件集合最多 65,536 个文件、32 层路径，独立 v1 的存储条目上限 65,536 包括补零；总字节数最多 `2^53-1`，分片最多 400,000；分片大小为 16 KiB 至 16 MiB 的二次幂。载荷必须至少包含一个非空文件，可以同时包含空文件。哈希按块/片读取，不把整个载荷装入内存。元数据、分片哈希和有界诊断保存在内存中。
 
-采用可移植安全路径子集：拒绝遍历、Windows 设备名、大小写冲突、文件/目录冲突和保留 `.pad` 源路径。读取已有种子时对不受支持的路径、文件属性和符号链接明确报错，不尝试静默改名。支持 HTTP(S) Tracker/Web Seed 和 UDP Tracker；不接收 URL 用户凭据或片段。只处理 BitTorrent 元数据与文件核验，不提供签名认证、网络传输、下载续传或完整客户端功能。
+采用可移植安全路径子集：拒绝遍历、Windows 设备名、大小写冲突、文件/目录冲突和保留 `.pad` 源路径。读取已有种子时对不受支持的路径、文件属性和符号链接明确报错，不尝试静默改名。独立 v1 补零只支持 `attr="p"` 且必须填满已有的未满分片，可有尾部补零；补零路径可省略，存在时仍检查安全组件。其他属性组合及符号链接明确拒绝，详细兼容范围见接口约定。支持 HTTP(S) Tracker/Web Seed 和 UDP Tracker；不接收 URL 用户凭据或片段。只处理 BitTorrent 元数据与文件核验，不提供签名认证、网络传输、下载续传或完整客户端功能。
 
 ## 来源、原创性和许可证
 
