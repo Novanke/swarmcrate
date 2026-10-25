@@ -103,6 +103,63 @@ def libtorrent_reference(payload, mode, piece, output):
     assert report["ok"], report
 
 
+def padded_v1_verification(directory):
+    """Independent BEP 47 fixtures: no padding files are ever put on disk."""
+    global checks
+    payload = directory / "padded-bundle"
+    payload.mkdir()
+    content = {b"a": b"abc", b"b": b"def", b"c": b"ghijk", b"empty": b""}
+    for name, data in content.items():
+        (payload / name.decode()).write_bytes(data)
+    for aligned, trailing in [(False, False), (True, False), (True, True)]:
+        nodes, stream = [], bytearray()
+        for name, data in content.items():
+            nodes.append({b"path": [name], b"length": len(data)})
+            stream.extend(data)
+            if (name == b"a" or (aligned and name == b"b") or (trailing and name == b"c")):
+                size = 16384 - len(stream) % 16384
+                nodes.append({b"attr": b"p", b"path": [b".pad", str(size).encode()], b"length": size})
+                stream.extend(bytes(size))
+        info = {b"name": b"padded-bundle", b"files": nodes, b"piece length": 16384,
+                b"pieces": b"".join(hashlib.sha1(stream[i:i + 16384]).digest() for i in range(0, len(stream), 16384))}
+        torrent = directory / f"padded-{aligned}-{trailing}.torrent"
+        torrent.write_bytes(lt.bencode({b"info": info}))
+        reference = lt.torrent_info(str(torrent))
+        summary = json.loads(command("inspect", torrent))
+        assert [f["path"] for f in summary["files"]] == [[name.decode()] for name in content]
+        assert summary["info_hash_v1"] == str(reference.info_hashes().v1) == hashlib.sha1(lt.bencode(info)).hexdigest()
+        report = json.loads(command("verify", torrent, payload))
+        assert report["ok"] and report["checked_pieces"] == reference.num_pieces()
+        assert not (payload / ".pad").exists()
+        checks += 1
+        # Padding isolates a's piece even while an unrelated real file is missing.
+        (payload / "b").unlink()
+        try:
+            report = json.loads(command("verify", torrent, payload, "--file", "a"))
+            assert report["ok"] and report["required_files"] == [0] and not report["complete"]
+            assert not json.loads(command("verify", torrent, payload, code=2))["ok"]
+        finally:
+            (payload / "b").write_bytes(content[b"b"])
+        checks += 1
+        # Non-aligned files still share pieces: padding does not imply all files align.
+        report = json.loads(command("verify", torrent, payload, "--file", "b"))
+        assert report["required_files"] == ([1] if aligned else [1, 2])
+        checks += 1
+        (payload / "b").write_bytes(b"DEF")
+        try:
+            report = json.loads(command("verify", torrent, payload, code=2))
+            assert report["failed_pieces"] == 1 and report["failures"][0]["piece"] == 1
+            assert report["failures"][0]["spans"][0]["file"] == 1
+        finally:
+            (payload / "b").write_bytes(content[b"b"])
+        checks += 1
+        edited = directory / f"padded-edited-{aligned}-{trailing}.torrent"
+        command("edit", torrent, edited, "--tracker", "https://example.org/announce")
+        assert lt.bencode(lt.bdecode(edited.read_bytes())[b"info"]) == lt.bencode(info)
+        assert json.loads(command("verify", edited, payload))["ok"]
+        checks += 1
+
+
 def selected_verification(directory, bundle, mode):
     global checks
     torrent = directory / f"selected-{mode}.torrent"
@@ -220,6 +277,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     checks += 1
     for mode in ["v1", "v2", "hybrid"]:
         selected_verification(directory, bundle, mode)
+    padded_v1_verification(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))

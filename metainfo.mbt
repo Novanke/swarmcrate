@@ -228,25 +228,7 @@ fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
     reject("piece_length", "invalid piece length")
   }
   check_piece_length(piece.to_int())
-  let files : Array[SourceFile] = []
-  let single = lookup(info, "length") is Some(_)
-  if single {
-    if lookup(info, "files") is Some(_) {
-      reject("metainfo", "length and files are mutually exclusive")
-    }
-    files.push({ path: [name], length: as_int(require_key(info, "length")), })
-  } else {
-    for f in as_list(require_key(info, "files")) {
-      if lookup(f, "attr") is Some(_) {
-        reject("metainfo", "file attributes not supported in v1-only input")
-      }
-      let path : Array[String] = []
-      for component in as_list(require_key(f, "path")) {
-        path.push(as_text(component))
-      }
-      files.push({ path, length: as_int(require_key(f, "length")), })
-    }
-  }
+  let (files, entries, single, total) = read_v1_layout(info, name, piece)
   let private_flag = match lookup(info, "private") {
     None => false
     Some(n) => {
@@ -274,7 +256,6 @@ fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
     comment,
   }
   validate_options(files, options)
-  let total = validate_sources(files)
   let pieces = as_blob(require_key(info, "pieces"))
   if pieces.length().to_int64() != (total + piece - 1L) / piece * 20L {
     reject("pieces", "piece hash count does not match payload length")
@@ -298,9 +279,7 @@ fn parse_torrent(data : Bytes) -> ParsedTorrent raise CrateError {
     },
     pieces,
     roots: [],
-    entries: files.mapi(fn(i, f) {
-      DataEntry::{ source: i, length: f.length, padding: false, }
-    }),
+    entries,
   }
 }
 
@@ -321,7 +300,7 @@ pub fn expected_v2_files(data : Bytes) -> Array[V2FileHash] raise CrateError {
 }
 
 ///|
-/// V1 storage size includes virtual hybrid padding, unlike the real file total.
+/// V1 storage size includes virtual v1/hybrid padding, unlike the real file total.
 pub fn torrent_storage_bytes(data : Bytes) -> Int64 raise CrateError {
   let mut total = 0L
   for entry in parse_torrent(data).entries {
