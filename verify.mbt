@@ -254,11 +254,10 @@ pub fn verify_payload(
     failures: [],
     limit: detail_limit,
   }
-  if parsed.summary.mode != V2 {
-    verify_v1(parsed, plan.v1_pieces, lengths, read, state)
-  }
-  if parsed.summary.mode != V1 {
-    verify_v2(parsed, plan.selected, lengths, read, state)
+  match parsed.summary.mode {
+    V1 => verify_v1(parsed, plan.v1_pieces, lengths, read, state)
+    V2 => verify_v2(parsed, plan.selected, lengths, read, state)
+    Hybrid => verify_hybrid(parsed, plan.selected, lengths, read, state)
   }
   {
     ok: state.failed == 0 && issues.is_empty(),

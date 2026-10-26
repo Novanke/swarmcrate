@@ -28,11 +28,11 @@ for (let i = 0; i < runs; i++) {
   }
 }
 function summarize(samples) {
-  if (!samples.length || samples.some(s => s.length !== 3)) throw Error('Expected three benchmark cases');
+  if (!samples.length || samples.some(s => s.length !== 4)) throw Error('Expected four benchmark cases');
   return samples[0].map((first, index) => {
     const times = samples.map(sample => {
       const item = sample[index];
-      for (const key of ['case', 'files', 'read_calls', 'read_bytes', 'metainfo_bytes', 'info_hash_v1', 'info_hash_v2']) {
+      for (const key of ['case', 'files', 'read_calls', 'read_bytes', 'metainfo_bytes', 'info_hash_v1', 'info_hash_v2', 'checked_pieces']) {
         if (item[key] !== first[key]) throw Error(`Unstable ${key} in benchmark`);
       }
       return item.milliseconds;
@@ -48,7 +48,7 @@ if (baseline) {
   output.baseline = summarize(results.get(baseline));
   for (let i = 0; i < output.current.length; i++) {
     const a = output.current[i], b = output.baseline[i];
-    if (a.case !== b.case || a.files !== b.files || a.info_hash_v1 !== b.info_hash_v1 || a.info_hash_v2 !== b.info_hash_v2) {
+    if (a.case !== b.case || a.files !== b.files || a.info_hash_v1 !== b.info_hash_v1 || a.info_hash_v2 !== b.info_hash_v2 || a.checked_pieces !== b.checked_pieces) {
       throw Error('Baseline and current input/layout identities differ');
     }
   }

@@ -39,6 +39,46 @@ fn measure(
 }
 
 ///|
+fn measure_verify() -> Unit raise @lib.CrateError {
+  let files : Array[@lib.SourceFile] = [
+    { path: ["data.bin"], length: 8388611L, },
+  ]
+  let torrent = @lib.create_torrent(
+    files,
+    { ..@lib.create_options("benchmark"), mode: @lib.Hybrid, },
+    fn(_, _, n) { Bytes::make(n, 7) },
+  )
+  let mut reads = 0
+  let mut bytes = 0L
+  let start = now_ms()
+  let report = @lib.verify_payload(torrent, [Some(8388611L)], fn(_, _, n) {
+    reads += 1
+    bytes += n.to_int64()
+    Bytes::make(n, 7)
+  })
+  let elapsed = now_ms() - start
+  if !report.ok {
+    abort("verification benchmark failed")
+  }
+  let info = @lib.inspect_torrent(torrent)
+  println(
+    Json::object(
+      Map([
+        ("case", Json::string("hybrid-verify-8MiB")),
+        ("files", Json::number(1)),
+        ("milliseconds", Json::number(elapsed)),
+        ("read_calls", Json::number(reads.to_double())),
+        ("read_bytes", Json::string(bytes.to_string())),
+        ("metainfo_bytes", Json::number(torrent.length().to_double())),
+        ("info_hash_v1", Json::string(info.info_hash_v1.unwrap_or(""))),
+        ("info_hash_v2", Json::string(info.info_hash_v2.unwrap_or(""))),
+        ("checked_pieces", Json::number(report.checked_pieces.to_double())),
+      ]),
+    ).stringify(),
+  )
+}
+
+///|
 fn main {
   try {
     for count in [1000, 5000] {
@@ -59,6 +99,7 @@ fn main {
       [{ path: ["data.bin"], length: 8388611L, }],
       @lib.Hybrid,
     )
+    measure_verify()
   } catch {
     @lib.CrateError(code, detail) =>
       abort("benchmark failed: " + code + ": " + detail)

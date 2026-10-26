@@ -103,6 +103,80 @@ def libtorrent_reference(payload, mode, piece, output):
     assert report["ok"], report
 
 
+def single_pass_hybrid_verification(directory):
+    """Observe actual Node filesystem reads, without replacing MoonBit hashing."""
+    global checks
+    payload = directory / "single-pass"
+    payload.mkdir()
+    (payload / "a.bin").write_bytes(bytes(i % 251 for i in range(2097169)))
+    (payload / "b.bin").write_bytes(b"abc")
+    (payload / "empty").write_bytes(b"")
+    preload = directory / "observe-reads.mjs"
+    preload.write_text('''import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(process.env.SWARM_READ_ROOT);
+const watched = new Map();
+const stats = {bytes:0, calls:0, max_request:0, faults:0};
+const open = fs.openSync, read = fs.readSync, close = fs.closeSync;
+fs.openSync = function(file, ...rest) {
+  const fd = open.call(this, file, ...rest);
+  const full = path.resolve(String(file));
+  if (full === root || full.startsWith(root + path.sep)) watched.set(fd, full);
+  return fd;
+};
+fs.readSync = function(fd, buffer, offset, length, position) {
+  if (watched.has(fd)) {
+    stats.max_request = Math.max(stats.max_request, length);
+    if (process.env.SWARM_READ_FAULT && watched.get(fd).endsWith('a.bin') && position === 1048576) {
+      stats.faults++;
+      if (process.env.SWARM_READ_FAULT === 'throw') throw Error('test-only read failure');
+      return 0;
+    }
+  }
+  const n = read.call(this, fd, buffer, offset, length, position);
+  if (watched.has(fd)) { stats.bytes += n; stats.calls++; }
+  return n;
+};
+fs.closeSync = function(fd) { watched.delete(fd); return close.call(this, fd); };
+process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.stringify(stats)));
+''', encoding="utf-8")
+    for piece in [32768, 2097152]:
+        torrent = directory / f"one-pass-{piece}.torrent"
+        command("create", payload, torrent, "--mode", "hybrid", "--piece-length", piece)
+        lt.torrent_info(str(torrent))
+        total = json.loads(command("verify", torrent, payload))["checked_pieces"]
+        for selected, expected in [(None, 2097172), ("a.bin", 2097169), ("b.bin", 3), ("empty", 0)]:
+            counts = directory / f"reads-{piece}-{selected}.json"
+            env = {**os.environ, "SWARM_READ_ROOT": str(payload), "SWARM_READ_RESULT": str(counts)}
+            env.pop("SWARM_READ_FAULT", None)
+            parts = ["verify", str(torrent), str(payload)]
+            if selected is not None:
+                parts += ["--file", selected]
+            result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), *parts],
+                                    capture_output=True, text=True, encoding="utf-8", env=env)
+            assert result.returncode == 0, result.stderr + result.stdout
+            report = json.loads(result.stdout)
+            observed = json.loads(counts.read_text())
+            assert report["ok"] and report["checked_pieces"] + report["skipped_pieces"] == total
+            assert observed["bytes"] == expected and observed["max_request"] <= 1048576
+            assert report["complete"] == (selected is None)
+            checks += 1
+        if piece == 2097152:
+            for fault in ["throw", "short"]:
+                counts = directory / f"fault-{fault}.json"
+                env = {**os.environ, "SWARM_READ_ROOT": str(payload), "SWARM_READ_RESULT": str(counts),
+                       "SWARM_READ_FAULT": fault}
+                result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload)],
+                                        capture_output=True, text=True, encoding="utf-8", env=env)
+                assert result.returncode == 2, result.stderr + result.stdout
+                report = json.loads(result.stdout)
+                observed = json.loads(counts.read_text())
+                assert report["checked_pieces"] == total and report["failed_pieces"] == report["unreadable_pieces"] == 2
+                assert [f["scheme"] for f in report["failures"]] == ["sha1", "sha256"]
+                assert observed["faults"] == 1 and observed["bytes"] == 1048576 + 17 + 3
+                checks += 1
+
+
 def padded_v1_verification(directory):
     """Independent BEP 47 fixtures: no padding files are ever put on disk."""
     global checks
@@ -278,6 +352,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     for mode in ["v1", "v2", "hybrid"]:
         selected_verification(directory, bundle, mode)
     padded_v1_verification(directory)
+    single_pass_hybrid_verification(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))
