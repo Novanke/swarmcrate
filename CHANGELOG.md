@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-10-26
+
+- Verify hybrid payloads with one bounded real-file read pass shared by SHA-1 and SHA-256. Preserve the different data-zero and Merkle zero-hash rules, including optional trailing padding, empty files and selected-file scopes. Both expected hashes are checked independently.
+- Isolate failed/short/oversized reads to their piece and continue later pieces. A transient failure now makes both checks for that piece unreadable, without a second scheme retry. Stable inputs and deterministic failures preserve the former two-pass diagnostic order, indices, ranges, counters and detail cap; public signatures and JSON schemas stay unchanged.
+- Add non-rewindable-source accounting up to the 16 MiB piece limit, reference comparisons against separate verification passes, and independently tampered hash-scheme regressions. Extend real-file interoperability with observed OS reads and injected read failures.
+- Pass 24 core / 27 JS test blocks and 119 independent real-file scenarios. Add a hybrid-verification benchmark against registry 0.4.0: half the logical payload reads and callbacks with the same hash-check count and content identifiers. The measured CPU-bound times remain close; no twofold speed claim.
+
 ## 0.4.0 — 2026-10-25
 
 - Read standalone v1 BEP 47 padding as virtual zeros, keeping real callback indices, selected-file scopes and damage spans separate from storage layout. Support omitted/repeated safe padding paths and trailing padding; ordinary files need not all be aligned. Creation of standalone v1 remains unpadded.

@@ -53,7 +53,7 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.4.0
+node scripts/demo.mjs --output ./artifacts/demo-0.5.0
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告，以及指定文件的局部校验报告；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
@@ -61,7 +61,7 @@ node scripts/demo.mjs --output ./artifacts/demo-0.4.0
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.4.0
+moon add Novanke/swarmcrate@0.5.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -99,7 +99,7 @@ moon run examples/library --target js --release --deny-warn
 - v1/v2/混合格式创建与严格读取；混合格式使用虚拟补零，并核对两种格式的路径、顺序、长度和对齐一致性。
 - 读取独立 v1 的 BEP 47 补零条目，以虚拟零字节参与核验，不需要磁盘上的 `.pad` 文件；局部核验和损坏定位始终使用真实文件索引。
 - 所有创建模式只读取一次真实载荷；v2 读取按片边界合并为不超过 1 MiB 的请求，Merkle 叶子仍严格为 16 KiB；多文件树使用目录索引构建。
-- 文件大小、缺失、读取异常、损坏分片及文件偏移报告；混合格式同时核验两套哈希。
+- 文件大小、缺失、读取异常、损坏分片及文件偏移报告；混合格式在一次真实读取中分别核验两套预期哈希，短片的虚拟补零不读磁盘。读取失败同时影响该片的两套检查，之后的分片继续检查。
 - SHA-1 十六进制/Base32、SHA-256 multihash 磁力链接解析与输出，UTF-8 百分号编码。
 - Tracker 分层、Web Seed、私有标志、注释，以及保留 `info` 精确字节的分发地址编辑。
 - 文件扫描、分段读取、源文件变更检测、拒绝符号链接和特殊文件、独占创建输出。
@@ -118,11 +118,11 @@ python -m pip install libtorrent==2.1.1 torf==4.3.1
 python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 ```
 
-当前有 **21 个核心测试块**，JS 加文件系统/CLI 测试共 **24 个测试块**。独立互操作脚本通过 **109 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。
+当前有 **24 个核心测试块**，JS 加文件系统/CLI 测试共 **27 个测试块**。独立互操作脚本通过 **119 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。新增真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败与短读后的继续检查。
 
-仅根目录自写库代码：**2,304 行非空非注释源码，1,451 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+仅根目录自写库代码：**2,428 行非空非注释源码，1,545 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
-性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
+混合核验的 8 MiB + 3 字节合成对照中，相比注册表 0.4.0，读取量从 16,777,222 降至 8,388,611 字节，回调次数由 66 降至 33，两套哈希检查仍共 66 次。该结果说明读取量减少，不等于 CPU 哈希工作减半；性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 
 ## 范围和资源边界
 

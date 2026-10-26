@@ -1,5 +1,20 @@
 # Reproducible performance comparison
 
+## Hybrid verification: 0.4.0 to 0.5.0
+
+Measured on 2026-10-26, Windows x64, Node.js v24.19.0, MoonBit stable 2026-10-16, optimized JS. The same current `bench/main.mbt` was compiled against registry `Novanke/swarmcrate@0.4.0` and the new implementation. Five alternating process runs; medians shown. Torrent creation and final display inspection are outside the verification interval; parsing and layout validation inside `verify_payload` are included. The synthetic payload is 8 MiB + 3 bytes valued 7, using 256 KiB hybrid pieces.
+
+| Metric | Registry 0.4.0 | 0.5.0 |
+| --- | ---: | ---: |
+| Logical payload bytes read | 16,777,222 | 8,388,611 |
+| Read callback calls | 66 | 33 |
+| Hash checks (both schemes) | 66 | 66 |
+| Median verification time | 103.28 ms | 102.04 ms |
+
+Both infohashes are identical. The improvement is half the logical read volume and callback count, while both hashes still execute. Timings are close on this CPU-bound synthetic sample; no substantial wall-clock gain or production throughput claim is made. Separate real-file tests instrument actual Node filesystem reads: full and selected hybrid checks consume one copy of the relevant payload bytes, and an injected failure affects both checks for one piece while later pieces continue. These are byte-count assertions, not disk throughput measurements.
+
+## Historical creation baseline: 0.2.0 to 0.3.0
+
 Measured on 2026-10-23, Windows x64, Node.js v24.19.0, MoonBit stable 2026-10-16, optimized JS builds. The same `bench/main.mbt` was compiled against the registry's `Novanke/swarmcrate@0.2.0` and the 0.3.0 source. The harness alternates process order and reports the median of five runs. Compilation and the final inspection used to print identifiers are outside the measured interval; validation performed inside `create_torrent` is included.
 
 | Synthetic case | 0.2.0 median | 0.3.0 median | Content identifiers |
@@ -35,7 +50,7 @@ license = "Apache-2.0"
 In that directory, install the exact baseline and compile the copied benchmark:
 
 ```sh
-moon add Novanke/swarmcrate@0.2.0
+moon add Novanke/swarmcrate@0.4.0
 moon build --target js --release --deny-warn
 ```
 
@@ -45,4 +60,4 @@ Back in the current repository:
 node scripts/benchmark.mjs --runs 5 --baseline ../baseline/_build/js/release/build/bench/bench.js
 ```
 
-Keep the benchmark code, compiler, runtime, piece policy and synthetic data identical. Do not point the baseline module at a local source override. The harness rejects changed case identities, checks stable read counts across runs, and compares both infohashes before declaring the layouts equivalent. It prints machine-readable JSON so a reviewer can inspect their own results instead of relying on the table above.
+Use 0.4.0 for the hybrid-verification comparison above; choose 0.2.0 to revisit the historical creation baseline. The current harness includes four cases, with hybrid verification added after the original three creation cases. Keep the benchmark code, compiler, runtime, piece policy and synthetic data identical. Do not point the baseline module at a local source override. The harness rejects changed case identities, checks stable read counts across runs, and compares both infohashes before declaring the layouts equivalent. It prints machine-readable JSON so a reviewer can inspect their own results instead of relying on the table above.
