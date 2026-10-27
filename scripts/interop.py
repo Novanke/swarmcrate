@@ -103,6 +103,50 @@ def libtorrent_reference(payload, mode, piece, output):
     assert report["ok"], report
 
 
+def source_snapshot_verification(directory):
+    """Mutate actual directory membership without changing any original file bytes."""
+    global checks
+    preload = ROOT / "scripts/fixtures/source_changes.mjs"
+    for mode in ["v1", "v2", "hybrid"]:
+        for action in ["stable", "reorder", "add", "fill-empty", "add-empty", "remove-empty", "rename-empty", "replace-empty", "during-list"]:
+            payload = directory / f"snapshot-{mode}-{action}"
+            (payload / "empty").mkdir(parents=True)
+            data = bytes(i % 251 for i in range(70001))
+            (payload / "a.bin").write_bytes(data)
+            (payload / "b.txt").write_bytes(b"secondary")
+            output = directory / f"snapshot-{mode}-{action}.torrent"
+            counts = directory / f"snapshot-{mode}-{action}.json"
+            protect_existing = mode == "hybrid" and action == "rename-empty"
+            if protect_existing:
+                output.write_bytes(b"preserve existing output")
+            env = {**os.environ, "SWARM_SNAPSHOT_ROOT": str(payload), "SWARM_SNAPSHOT_ACTION": action,
+                   "SWARM_SNAPSHOT_RESULT": str(counts)}
+            result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli),
+                                     "create", str(payload), str(output), "--mode", mode],
+                                    capture_output=True, text=True, encoding="utf-8", env=env)
+            stable = action in ["stable", "reorder"]
+            assert result.returncode == (0 if stable else 1), result.stderr + result.stdout
+            observed = json.loads(counts.read_text())
+            assert observed["opened"] == observed["closed"] and observed["opened"] >= 2
+            if stable:
+                assert observed["mutations"] == 0
+                assert observed["reordered"] > 0 if action == "reorder" else True
+                lt.torrent_info(str(output))
+                summary = json.loads(command("inspect", output))
+                assert [f["path"] for f in summary["files"]] == [["a.bin"], ["b.txt"]]
+                assert json.loads(command("verify", output, payload))["ok"]
+            else:
+                assert observed["mutations"] == 1
+                assert json.loads(result.stdout)["error"] == "changed", result.stdout
+                if protect_existing:
+                    assert output.read_bytes() == b"preserve existing output"
+                else:
+                    assert not output.exists(), "stale metadata must not be committed"
+            assert (payload / "a.bin").read_bytes() == data
+            assert (payload / "b.txt").read_bytes() == b"secondary"
+            checks += 1
+
+
 def single_pass_hybrid_verification(directory):
     """Observe actual Node filesystem reads, without replacing MoonBit hashing."""
     global checks
@@ -353,6 +397,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
         selected_verification(directory, bundle, mode)
     padded_v1_verification(directory)
     single_pass_hybrid_verification(directory)
+    source_snapshot_verification(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))

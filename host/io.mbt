@@ -7,6 +7,10 @@ extern "js" fn IoResult::error(self : Self) -> String =
   #| r => r.error
 
 ///|
+extern "js" fn IoResult::code(self : Self) -> String =
+  #| r => r.code || "io"
+
+///|
 extern "js" fn IoResult::text(self : Self) -> String =
   #| r => r.text || ""
 
@@ -56,7 +60,19 @@ extern "js" fn os_io(
   #|         throw e;
   #|       }
   #|     }
-  #|     if (op === 'list') return {error:'',text:JSON.stringify(fs.readdirSync(target))};
+  #|     if (op === 'list') {
+  #|       if (!Number.isInteger(size) || size < 0) return {error:'invalid directory entry limit',code:'limit'};
+  #|       const directory = fs.opendirSync(target);
+  #|       try {
+  #|         const names = [];
+  #|         let entry;
+  #|         while ((entry = directory.readSync()) !== null) {
+  #|           if (names.length >= size) return {error:'directory entry limit exceeded',code:'limit'};
+  #|           names.push(entry.name);
+  #|         }
+  #|         return {error:'',text:JSON.stringify(names)};
+  #|       } finally { directory.closeSync(); }
+  #|     }
   #|     if (op === 'read') {
   #|       if (!Number.isSafeInteger(offset) || offset < 0 || size < 0 || size > 1048576) throw Error('invalid read range');
   #|       fd = fs.openSync(target,fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
@@ -103,7 +119,7 @@ fn io(
 ) -> IoResult raise @lib.CrateError {
   let result = os_io(op, path, offset, size, content, stamp)
   if result.error() != "" {
-    raise @lib.CrateError("io", result.error())
+    raise @lib.CrateError(result.code(), result.error())
   }
   result
 }
@@ -125,7 +141,8 @@ fn json_text(value : Json) -> String raise @lib.CrateError {
 
 ///|
 pub fn stat(path : String) -> FileStat raise @lib.CrateError {
-  let value = @json.parse(io("stat", path).text()) catch {
+  let encoded = io("stat", path).text()
+  let value = @json.parse(encoded) catch {
     _ => raise @lib.CrateError("io", "invalid OS JSON")
   }
   let fields = match value {
@@ -202,79 +219,6 @@ pub fn read_metainfo(path : String) -> Bytes raise @lib.CrateError {
     offset += n.to_int64()
   }
   Bytes::from_array(out)
-}
-
-///|
-pub(all) struct DiskSource {
-  descriptor : @lib.SourceFile
-  absolute_path : String
-  stamp : String
-}
-
-///|
-fn visit(
-  directory : String,
-  path : Array[String],
-  out : Array[DiskSource],
-) -> Unit raise @lib.CrateError {
-  if path.length() > 32 || out.length() > 65536 {
-    raise @lib.CrateError("limit", "directory exceeds limits")
-  }
-  let value = @json.parse(io("list", directory).text()) catch {
-    _ => raise @lib.CrateError("io", "invalid OS directory JSON")
-  }
-  let names = match value {
-    Array(a) => a
-    _ => raise @lib.CrateError("io", "invalid OS directory")
-  }
-  for value in names {
-    let name = json_text(value)
-    let child = directory + "/" + name
-    let child_path = path.copy()
-    child_path.push(name)
-    let info = stat(child)
-    if info.kind == "directory" {
-      visit(child, child_path, out)
-    } else if info.kind == "file" {
-      out.push({
-        descriptor: { path: child_path, length: info.length, },
-        absolute_path: child,
-        stamp: info.stamp,
-      })
-    } else {
-      raise @lib.CrateError("io", "non-regular source: " + child)
-    }
-  }
-}
-
-///|
-/// Scan without following symbolic links. File tokens detect edits during hashing.
-pub fn scan(
-  path : String,
-) -> (String, Bool, Array[DiskSource]) raise @lib.CrateError {
-  let absolute = resolve(path)
-  let normalized = absolute
-    .split("\\")
-    .map(fn(p) { p.to_owned() })
-    .to_array()
-    .join("/")
-  let parts = normalized.split("/").to_array()
-  let name = parts[parts.length() - 1].to_owned()
-  let info = stat(absolute)
-  let out : Array[DiskSource] = []
-  if info.kind == "file" {
-    out.push({
-      descriptor: { path: [name], length: info.length, },
-      absolute_path: absolute,
-      stamp: info.stamp,
-    })
-  } else if info.kind == "directory" {
-    visit(absolute, [], out)
-  } else {
-    raise @lib.CrateError("io", "expected a regular file or directory")
-  }
-  ignore(@lib.validate_sources(out.map(fn(s) { s.descriptor })))
-  (name, info.kind == "file", out)
 }
 
 ///|

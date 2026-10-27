@@ -97,7 +97,10 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
   arity(args, 2)
   let input = args.positionals[0]
   let output = args.positionals[1]
-  let (base, single, sources) = @host.scan(input)
+  let snapshot = @host.scan_snapshot(input)
+  let base = snapshot.name
+  let single = snapshot.single_file
+  let sources = snapshot.sources
   let name = one(args, "--name", base)
   let files = sources.map(fn(s) {
     if single {
@@ -139,14 +142,8 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
   let torrent = @lib.create_torrent(files, options, (i, offset, n) => {
     @host.read_source(sources, i, offset, n)
   })
-  // A final scan catches edits after a source's last block and changes to empty files.
-  for source in sources {
-    @host.check_unchanged(source.absolute_path, {
-      kind: "file",
-      length: source.descriptor.length,
-      stamp: source.stamp,
-    })
-  }
+  // Recheck both file contents/identity tokens and the scanned directory roster.
+  @host.check_scan_unchanged(snapshot)
   let info = @lib.inspect_torrent(torrent)
   let magnet = @lib.torrent_magnet(torrent)
   @host.write_new(output, torrent)
