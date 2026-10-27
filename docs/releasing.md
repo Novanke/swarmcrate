@@ -4,7 +4,7 @@ For every completed functionality update that will be used for review, publish a
 
 Choose the next unfinished milestone from `ROADMAP.md`, complete its user workflow and update its evidence before preparing a release. Keep planned work distinct from delivered behavior.
 
-1. Update `moon.mod` version and version-bearing CLI/report strings; keep README installation examples current.
+1. Update `moon.mod` version and version-bearing CLI/report/receipt producer strings; keep README installation examples current.
 2. Run `python scripts/check_toolchain.py` (stable moonc >= 0.10.14), the `examples/library` executable on both supported backends, `moon info`, `moon fmt --check`, both backend tests with `--deny-warn`, JS build, source audit and independent interoperability checks.
 3. Verify no private application form, personal contact data, credentials, local artifacts, payloads or toolchain directories are tracked. Runtime examples must be synthetic or explicitly redistributable.
 4. Commit and push the actual implementation and evidence; verify public CI. Preserve real history; do not pad source or commits.
