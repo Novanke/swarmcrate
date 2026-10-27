@@ -108,6 +108,7 @@ def source_snapshot_verification(directory):
     global checks
     preload = ROOT / "scripts/fixtures/source_changes.mjs"
     for mode in ["v1", "v2", "hybrid"]:
+        reference = None
         for action in ["stable", "reorder", "add", "fill-empty", "add-empty", "remove-empty", "rename-empty", "replace-empty", "during-list"]:
             payload = directory / f"snapshot-{mode}-{action}"
             (payload / "empty").mkdir(parents=True)
@@ -122,7 +123,7 @@ def source_snapshot_verification(directory):
             env = {**os.environ, "SWARM_SNAPSHOT_ROOT": str(payload), "SWARM_SNAPSHOT_ACTION": action,
                    "SWARM_SNAPSHOT_RESULT": str(counts)}
             result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli),
-                                     "create", str(payload), str(output), "--mode", mode],
+                                     "create", str(payload), str(output), "--mode", mode, "--name", "snapshot-fixture"],
                                     capture_output=True, text=True, encoding="utf-8", env=env)
             stable = action in ["stable", "reorder"]
             assert result.returncode == (0 if stable else 1), result.stderr + result.stdout
@@ -130,10 +131,16 @@ def source_snapshot_verification(directory):
             assert observed["opened"] == observed["closed"] and observed["opened"] >= 2
             if stable:
                 assert observed["mutations"] == 0
-                assert observed["reordered"] > 0 if action == "reorder" else True
+                if action == "reorder":
+                    assert observed["reordered"] > 0
                 lt.torrent_info(str(output))
                 summary = json.loads(command("inspect", output))
                 assert [f["path"] for f in summary["files"]] == [["a.bin"], ["b.txt"]]
+                hashes = (summary["info_hash_v1"], summary["info_hash_v2"])
+                if reference is None:
+                    reference = hashes
+                else:
+                    assert hashes == reference, "directory order must not change content identity"
                 assert json.loads(command("verify", output, payload))["ok"]
             else:
                 assert observed["mutations"] == 1

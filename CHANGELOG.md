@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-10-27
+
+- Recheck all scanned directory membership and identity before committing created metainfo, including otherwise unrepresented empty directories. Detect additions, removal, rename and replacement without relying only on file tokens; enumeration order alone does not fail or change content identity.
+- Add JS-only host APIs `scan_snapshot(path, max_entries=200000)` and `check_scan_unchanged(snapshot)`, plus `ScanSnapshot` and `DirectorySnapshot`. Keep the existing `scan` tuple API. The CLI automatically uses the stronger completion check; it still provides sequential consistency checks, not an atomic snapshot.
+- Bound traversal by a shared descendant-entry budget (files and directories, excluding the input root), retain the real-file/depth limits, and enumerate OS directories incrementally with handle cleanup on success and failure. Preserve budget/OS errors instead of masking them as JSON parse failures.
+- Pass 24 core / 30 JS test blocks and 146 independent real-file scenarios. Twenty-seven added scenarios mutate directory membership in all three modes, check stable/reordered controls and content identity, verify no stale output is committed, and observe directory-handle cleanup. The portable core and its conservative source measurement are unchanged.
+
 ## 0.5.0 — 2026-10-26
 
 - Verify hybrid payloads with one bounded real-file read pass shared by SHA-1 and SHA-256. Preserve the different data-zero and Merkle zero-hash rules, including optional trailing padding, empty files and selected-file scopes. Both expected hashes are checked independently.

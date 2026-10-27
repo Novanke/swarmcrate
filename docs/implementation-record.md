@@ -1,4 +1,4 @@
-# Implementation evidence — 2026-10-26
+# Implementation evidence — 2026-10-27
 
 Each implementation milestone below contains executable MoonBit behavior and its checks. History is ordinary chronological development; no empty commits, backdating, force-pushed reconstruction, document-only or test-only milestones are presented as functional work.
 
@@ -28,6 +28,7 @@ Each implementation milestone below contains executable MoonBit behavior and its
 | `a72aabe` | Batch v2 I/O into bounded chunks while retaining 16 KiB Merkle leaves and per-piece failure isolation. |
 | `2d45efd` | Parse standalone v1 virtual padding with real-file index mapping, storage limits and explicit link/attribute rejection. |
 | `f64fb7d` | Verify hybrid payloads from one shared bounded read pass; retain independent hash checks, piece failure isolation, diagnostic ordering and capped details. |
+| `43501f3` | Snapshot/recheck source directories including empty ones, reject stale creation after roster changes, and bound/close OS directory enumeration. |
 
 The later interoperability, CI and documentation commits are additional evidence, not required to make this list exceed ten. Whether a milestone meets a competition's definition of an effective commit is for its reviewers to decide.
 
@@ -39,8 +40,8 @@ The later interoperability, CI and documentation commits are additional evidence
 
 - Toolchain: MoonBit stable 2026-10-16, moon `0.1.20261016`, moonc `v0.10.16+b1a0e846e`.
 - Wasm GC: 24 core test blocks passed with warnings denied.
-- JS: 27 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
-- Independent real-file script: 119 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
+- JS: 30 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
+- Independent real-file script: 146 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
 - The script checks output acceptance and hashes, reads and verifies libtorrent-generated v1/v2/hybrid torrents, exercises Unicode/nested/empty files, piece/block boundaries, corruption, truncation, missing payload, HTML output, no overwrite and endpoint edits.
 - No network session, tracker connection, download or seeding is used in these checks.
 - Selection scenarios distinguish a subset from a full check, require v1 boundary neighbours, ignore unrelated damage during a subset check, fail missing empty files and normalize a selection of all files to complete verification.
@@ -51,3 +52,5 @@ Reproduce with the commands in the README and inspect CI logs for the exact publ
 0.4.0 adds standalone v1 padded-storage verification, including omitted paths, safe repeated pad names, trailing pads, mixed aligned/unaligned real files, exact callback mapping, partial scopes and corrupt-data offsets. The library example is executed on both backends; CI rejects an older or unrecognized compiler version. Examples and CI changes are not included in root implementation volume.
 
 0.5.0 adds single-pass hybrid verification, stable-input report comparisons with the existing separate v1/v2 verifiers, non-rewindable callbacks, transient-failure isolation, the maximum piece width, independently altered hashes and real OS read counters. Ten added disk scenarios cover full/subset/empty selection and injected exceptions/short reads. Benchmarks compare the same source against registry 0.4.0, not a local source override.
+
+0.6.0 adds directory-membership/identity snapshots and bounded enumeration in the MoonBit host/CLI layer. Twenty-seven new disk scenarios cover all modes, seven mutation conditions, stable/alternate enumeration controls, fixed-layout content identities and handle closure. Host APIs also test explicit budgets and membership comparison independent of timestamps. This host/CLI work is deliberately excluded from the root-library source measurement above; no new portable-core line count is claimed.
