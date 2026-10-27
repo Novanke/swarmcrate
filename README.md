@@ -11,6 +11,8 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 核心算法和命令处理由 MoonBit 实现，CLI 的 Node.js 适配层仅负责操作系统 I/O，不调用外部种子生成程序、系统哈希命令或网络服务。库可在 Wasm GC、JavaScript 后端使用，文件系统 CLI 需要 Node.js **22.16+**。没有下载、做种或 Tracker 服务功能。
 
+长期按三条主线推进：**开源发布与数据集交付、离线镜像巡检、MoonBit 可复用 SDK**。优先级、下一项交付与验收标准见 [开发路线图](docs/ROADMAP.md)。
+
 ## 快速使用
 
 安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，要求 **moonc ≥ 0.10.14**，本版验证使用 **0.10.16**；另安装 Node.js 22.16+。CI 会检查编译器版本下限。克隆后执行：
@@ -23,6 +25,14 @@ python scripts/check_toolchain.py  # 可选的本机版本检查；需要 Python
 moon build --target js --release
 node scripts/swarmcrate.mjs help
 ```
+
+发布前可先只读规划，不打开载荷文件、不计算内容哈希，也不生成输出文件：
+
+```sh
+node scripts/swarmcrate.mjs plan ./release --mode hybrid --piece-length auto
+```
+
+规划显示真实字节、逻辑布局字节、虚拟补零、两套分片数、v1 哈希字节和 v2 分片层字节上限。`storage_bytes` 不等于磁盘占用或流量，哈希层上限不等于完整种子大小；最终格式/节点限制仍由实际创建校验。计划不能替代载荷核验。
 
 制作真实目录的混合格式种子（Tracker 是可选项，示例地址不提供服务）：
 
@@ -55,7 +65,7 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.6.0
+node scripts/demo.mjs --output ./artifacts/demo-0.7.0
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告，以及指定文件的局部校验报告；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
@@ -63,7 +73,7 @@ node scripts/demo.mjs --output ./artifacts/demo-0.6.0
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.6.0
+moon add Novanke/swarmcrate@0.7.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -92,10 +102,11 @@ moon run examples/library --target wasm-gc --release --deny-warn
 moon run examples/library --target js --release --deny-warn
 ```
 
-示例依次创建 v1、v2、混合种子，输出元数据、磁力链接和完整核验报告，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
+示例依次规划并创建 v1、v2、混合种子，输出元数据、磁力链接和完整核验报告，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
 
 ## 已实现
 
+- 纯 MoonBit 的 `plan_torrent` / `plan_json` 和只读 CLI `plan`；创建复用规划预检，在读取载荷前拒绝超限布局。
 - 有界、规范 bencode 编解码，保留原始字节区间，拒绝重复/未排序字典键、非规范整数、截断、超深与过大输入。
 - v1 跨文件 SHA-1 分片，v2 16 KiB 区块 Merkle 树、零哈希补齐及认证分片层。
 - v1/v2/混合格式创建与严格读取；混合格式使用虚拟补零，并核对两种格式的路径、顺序、长度和对齐一致性。
@@ -105,7 +116,7 @@ moon run examples/library --target js --release --deny-warn
 - SHA-1 十六进制/Base32、SHA-256 multihash 磁力链接解析与输出，UTF-8 百分号编码。
 - Tracker 分层、Web Seed、私有标志、注释，以及保留 `info` 精确字节的分发地址编辑。
 - 文件扫描、分段读取、源文件与目录清单复查（含空目录）、拒绝符号链接和特殊文件、独占创建输出。创建期间的新增、移除、重命名与目录替换会触发错误，停止写出过时元数据。
-- 无损尺寸字符串 JSON、离线 HTML 核验报告和五个真实文件命令。
+- 无损尺寸字符串 JSON、离线 HTML 核验报告和六个真实文件命令。
 
 ## 验证与规模
 
@@ -120,9 +131,9 @@ python -m pip install libtorrent==2.1.1 torf==4.3.1
 python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 ```
 
-当前有 **24 个核心测试块**，JS 加文件系统/CLI 测试共 **30 个测试块**。独立互操作脚本通过 **146 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。
+当前有 **27 个核心测试块**，JS 加文件系统/CLI 测试共 **34 个测试块**。独立互操作脚本通过 **156 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。
 
-仅根目录自写库代码：**2,428 行非空非注释源码，1,545 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+仅根目录自写库代码：**2,532 行非空非注释源码，1,610 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
 混合核验的 8 MiB + 3 字节合成对照中，相比注册表 0.4.0，读取量从 16,777,222 降至 8,388,611 字节，回调次数由 66 降至 33，两套哈希检查仍共 66 次。该结果说明读取量减少，不等于 CPU 哈希工作减半；性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 

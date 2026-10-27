@@ -2,6 +2,8 @@
 
 For completed functionality updates used in review, follow `docs/releasing.md` and publish a new tested Mooncakes version. Do not count dependencies, generated interfaces, tests or documentation as effective implementation. Preserve meaningful development history, never add empty/contrived commits. Keep personal application information and all authentication files outside this repository.
 
+Development priorities follow `docs/ROADMAP.md`: release/data delivery, offline audit/diagnostics, and a reusable MoonBit SDK. Read the latest implemented and pending milestones before choosing work. Complete one useful, verifiable chain at a time and keep roadmap status factual. Preserve the user's edits and follow their latest direction; the roadmap does not override user instructions.
+
 This is a [MoonBit](https://docs.moonbitlang.com) project.
 
 You can browse and install extra skills here:

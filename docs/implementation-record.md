@@ -29,19 +29,20 @@ Each implementation milestone below contains executable MoonBit behavior and its
 | `2d45efd` | Parse standalone v1 virtual padding with real-file index mapping, storage limits and explicit link/attribute rejection. |
 | `f64fb7d` | Verify hybrid payloads from one shared bounded read pass; retain independent hash checks, piece failure isolation, diagnostic ordering and capped details. |
 | `43501f3` | Snapshot/recheck source directories including empty ones, reject stale creation after roster changes, and bound/close OS directory enumeration. |
+| `8c71e94` | Compute payload-free layout plans, expose portable JSON/API and a read-only CLI, and reuse the preflight before actual creation. |
 
 The later interoperability, CI and documentation commits are additional evidence, not required to make this list exceed ten. Whether a milestone meets a competition's definition of an effective commit is for its reviewers to decide.
 
 ## Source measurement
 
-`python scripts/source_audit.py` currently reports 14 root implementation files, 2,428 nonblank/non-comment code lines, and 1,545 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
+`python scripts/source_audit.py` currently reports 15 root implementation files, 2,532 nonblank/non-comment code lines, and 1,610 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
 
 ## Executed verification
 
 - Toolchain: MoonBit stable 2026-10-16, moon `0.1.20261016`, moonc `v0.10.16+b1a0e846e`.
-- Wasm GC: 24 core test blocks passed with warnings denied.
-- JS: 30 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
-- Independent real-file script: 146 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
+- Wasm GC: 27 core test blocks passed with warnings denied.
+- JS: 34 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
+- Independent real-file script: 156 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
 - The script checks output acceptance and hashes, reads and verifies libtorrent-generated v1/v2/hybrid torrents, exercises Unicode/nested/empty files, piece/block boundaries, corruption, truncation, missing payload, HTML output, no overwrite and endpoint edits.
 - No network session, tracker connection, download or seeding is used in these checks.
 - Selection scenarios distinguish a subset from a full check, require v1 boundary neighbours, ignore unrelated damage during a subset check, fail missing empty files and normalize a selection of all files to complete verification.
@@ -54,3 +55,5 @@ Reproduce with the commands in the README and inspect CI logs for the exact publ
 0.5.0 adds single-pass hybrid verification, stable-input report comparisons with the existing separate v1/v2 verifiers, non-rewindable callbacks, transient-failure isolation, the maximum piece width, independently altered hashes and real OS read counters. Ten added disk scenarios cover full/subset/empty selection and injected exceptions/short reads. Benchmarks compare the same source against registry 0.4.0, not a local source override.
 
 0.6.0 adds directory-membership/identity snapshots and bounded enumeration in the MoonBit host/CLI layer. Twenty-seven new disk scenarios cover all modes, seven mutation conditions, stable/alternate enumeration controls, fixed-layout content identities and handle closure. Host APIs also test explicit budgets and membership comparison independent of timestamps. This host/CLI work is deliberately excluded from the root-library source measurement above; no new portable-core line count is claimed.
+
+0.7.0 adds pure layout planning and a read-only CLI. Hand-checked layouts cover trailing empty files, original input order, exact piece limits and duplicate-root layer bounds. Ten real-file planning scenarios prohibit payload opens and compare planned sizes/counts with independently decoded created torrents. The roadmap distinguishes implemented milestones from future work and does not claim adoption or complete packaging-format compatibility.

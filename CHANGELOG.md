@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-27
+
+- Add portable `plan_torrent(files, options)`, `TorrentPlan` and `plan_json` (`swarmcrate.plan.v1`). Compute real/logical bytes, virtual hybrid padding, empty-file counts, both scheme piece counts, exact v1 hash bytes and a v2 piece-layer upper bound without payload reads or hashes.
+- Add CLI `plan INPUT` with shared creation-option preparation, automatic sizing and scan-consistency checks. Preserve creation output and all existing verification schemas. Creation uses the same preflight before payload I/O.
+- Preserve canonical last-file padding behavior, including trailing empty files. Layer bytes are bounded before content-based deduplication and are not advertised as complete metainfo size, physical storage or integrity evidence.
+- Establish three focused product tracks in `docs/ROADMAP.md`: release/data delivery, offline audit/diagnostics and reusable MoonBit SDK. The next milestone is an identity-bound saved verification receipt.
+- Pass 27 core / 34 JS test blocks and 156 independent real-file scenarios, including planning with payload opens blocked and comparisons against real created torrents. Both runnable examples and the disk demo now include planning.
+
 ## 0.6.0 — 2026-10-27
 
 - Recheck all scanned directory membership and identity before committing created metainfo, including otherwise unrepresented empty directories. Detect additions, removal, rename and replacement without relying only on file tokens; enumeration order alone does not fail or change content identity.
