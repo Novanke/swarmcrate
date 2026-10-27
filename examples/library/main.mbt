@@ -28,6 +28,11 @@ fn main {
         }
         content[offset.to_int():offset.to_int() + size].to_owned()
       }
+      let planned = @swarm.plan_torrent(files, options)
+      if planned.real_bytes != content.length().to_int64() {
+        abort("planning size mismatch")
+      }
+      println(@swarm.plan_json(planned).stringify())
       let torrent = @swarm.create_torrent(files, options, read)
       let summary = @swarm.inspect_torrent(torrent)
       let report = @swarm.verify_payload(

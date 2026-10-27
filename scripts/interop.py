@@ -103,6 +103,56 @@ def libtorrent_reference(payload, mode, piece, output):
     assert report["ok"], report
 
 
+def creation_planning(directory):
+    """Plans must agree with independently decoded output without reading payloads."""
+    global checks
+    payload = directory / "planning"
+    payload.mkdir()
+    (payload / "a.bin").write_bytes(b"abc")
+    (payload / "b.bin").write_bytes(bytes(i % 251 for i in range(32769)))
+    (payload / "z-empty").write_bytes(b"")
+    before = {p.name: p.read_bytes() for p in payload.iterdir()}
+    preload = ROOT / "scripts/fixtures/no_payload_reads.mjs"
+    for mode in ["v1", "v2", "hybrid"]:
+        for policy in ["auto", "16384", "1048576"]:
+            env = {**os.environ, "SWARM_PLAN_ROOT": str(payload)}
+            result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "plan", str(payload),
+                                     "--mode", mode, "--piece-length", policy],
+                                    capture_output=True, text=True, encoding="utf-8", env=env)
+            assert result.returncode == 0, result.stderr + result.stdout
+            plan = json.loads(result.stdout)
+            assert plan["schema"] == "swarmcrate.plan.v1"
+            assert plan["file_count"] == 3 and plan["empty_files"] == 1
+            assert plan["real_bytes"] == "32772"
+            piece = plan["piece_length"]
+            assert piece == (16384 if policy == "auto" else int(policy))
+            torrent = directory / f"planned-{mode}-{policy}.torrent"
+            command("create", payload, torrent, "--mode", mode, "--piece-length", policy)
+            lt.torrent_info(str(torrent))
+            top = lt.bdecode(torrent.read_bytes())
+            info = top[b"info"]
+            v1 = len(info.get(b"pieces", b"")) // 20
+            v2 = sum((len(data) + piece - 1) // piece for data in before.values()) if mode != "v1" else 0
+            padding = sum(f[b"length"] for f in info.get(b"files", []) if f.get(b"attr") == b"p")
+            actual_layers = sum(len(layer) for layer in top.get(b"piece layers", {}).values())
+            assert plan["v1_pieces"] == v1 and plan["v2_pieces"] == v2
+            assert int(plan["v1_hash_bytes"]) == v1 * 20
+            assert int(plan["padding_bytes"]) == padding
+            assert int(plan["storage_bytes"]) == 32772 + padding
+            assert int(plan["v2_piece_layer_bytes_upper_bound"]) >= actual_layers
+            assert json.loads(command("verify", torrent, payload))["ok"]
+            assert {p.name: p.read_bytes() for p in payload.iterdir()} == before
+            checks += 1
+    # Single-file layout never receives hybrid inter-file padding.
+    single = payload / "a.bin"
+    env = {**os.environ, "SWARM_PLAN_ROOT": str(single)}
+    result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "plan", str(single)],
+                            capture_output=True, text=True, encoding="utf-8", env=env)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)["padding_bytes"] == "0"
+    checks += 1
+
+
 def source_snapshot_verification(directory):
     """Mutate actual directory membership without changing any original file bytes."""
     global checks
@@ -405,6 +455,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     padded_v1_verification(directory)
     single_pass_hybrid_verification(directory)
     source_snapshot_verification(directory)
+    creation_planning(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))

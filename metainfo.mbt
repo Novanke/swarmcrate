@@ -316,7 +316,7 @@ pub fn create_torrent(
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
-  validate_options(files, options)
+  ignore(plan_torrent(files, options))
   let data = match options.mode {
     V1 => create_v1_torrent(files, options, read)
     V2 => create_v2_torrent(files, options, read)

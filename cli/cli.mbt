@@ -93,10 +93,15 @@ fn arity(args : Arguments, n : Int32) -> Unit raise @lib.CrateError {
 }
 
 ///|
-fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
-  arity(args, 2)
+priv struct PreparedInput {
+  snapshot : @host.ScanSnapshot
+  files : Array[@lib.SourceFile]
+  options : @lib.CreateOptions
+}
+
+///|
+fn prepare_input(args : Arguments) -> PreparedInput raise @lib.CrateError {
   let input = args.positionals[0]
-  let output = args.positionals[1]
   let snapshot = @host.scan_snapshot(input)
   let base = snapshot.name
   let single = snapshot.single_file
@@ -139,11 +144,28 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
     web_seeds: many(args, "--web-seed"),
     comment: one(args, "--comment", ""),
   }
-  let torrent = @lib.create_torrent(files, options, (i, offset, n) => {
-    @host.read_source(sources, i, offset, n)
+  { snapshot, files, options, }
+}
+
+///|
+fn plan(args : Arguments) -> CommandResult raise @lib.CrateError {
+  arity(args, 1)
+  let input = prepare_input(args)
+  let result = @lib.plan_torrent(input.files, input.options)
+  @host.check_scan_unchanged(input.snapshot)
+  { code: 0, output: @lib.plan_json(result).stringify(indent=2), }
+}
+
+///|
+fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
+  arity(args, 2)
+  let input = prepare_input(args)
+  let output = args.positionals[1]
+  let torrent = @lib.create_torrent(input.files, input.options, (i, offset, n) => {
+    @host.read_source(input.snapshot.sources, i, offset, n)
   })
   // Recheck both file contents/identity tokens and the scanned directory roster.
-  @host.check_scan_unchanged(snapshot)
+  @host.check_scan_unchanged(input.snapshot)
   let info = @lib.inspect_torrent(torrent)
   let magnet = @lib.torrent_magnet(torrent)
   @host.write_new(output, torrent)
@@ -230,33 +252,41 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     help_flags.contains(args[0]) ||
     (
       args.length() == 2 &&
-      ["create", "inspect", "magnet", "verify", "edit"].contains(args[0]) &&
+      ["plan", "create", "inspect", "magnet", "verify", "edit"].contains(
+        args[0],
+      ) &&
       help_flags.contains(args[1])
     ) {
     return {
       code: 0,
       output: "SwarmCrate 0.6.0 — offline BitTorrent metadata and payload verification\n" +
+      "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--html REPORT.html]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
       "Create defaults to auto piece sizing (aims for 4096 pieces, accounts for v2/hybrid file alignment). Use an explicit byte count for a fixed layout.\n" +
+      "Plan reads filesystem metadata only: no payload hashes or output files. Piece-layer bytes are an upper bound, not total metainfo size.\n" +
       "--file selects exact inspected paths (use /). V1 shared boundary pieces can require neighbour files. Partial success is not a full-payload certificate.\n" +
       "Outputs are new files; existing files are never overwritten. Exit: 0 success, 1 input/I/O error, 2 failed verification.\n" +
       "Core library: Wasm GC and JS. Filesystem CLI: Node.js >=22.16. No network operations.",
     }
   }
   match args[0] {
-    "create" =>
-      create(
-        parse_args(
-          args,
-          [
-            "--mode", "--piece-length", "--name", "--tracker", "--web-seed", "--comment",
-          ],
-          true,
-        ),
+    "plan" | "create" => {
+      let parsed = parse_args(
+        args,
+        [
+          "--mode", "--piece-length", "--name", "--tracker", "--web-seed", "--comment",
+        ],
+        true,
       )
+      if args[0] == "plan" {
+        plan(parsed)
+      } else {
+        create(parsed)
+      }
+    }
     "verify" => verify(parse_args(args, ["--html", "--file"], false))
     "inspect" | "magnet" => {
       let parsed = parse_args(args, [], false)

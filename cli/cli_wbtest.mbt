@@ -59,7 +59,7 @@ test "CLI creates usable files edits endpoints verifies and uses meaningful exit
   assert_eq(execute(["create", "a", "b", "--bad"]).code, 1)
   assert_eq(execute(["verify"]).code, 1)
   assert_eq(execute(["help"]).code, 0)
-  for command in ["create", "inspect", "magnet", "verify", "edit"] {
+  for command in ["plan", "create", "inspect", "magnet", "verify", "edit"] {
     assert_eq(execute([command, "--help"]).code, 0)
   }
   let auto = dir + "/auto.torrent"
@@ -74,6 +74,31 @@ test "CLI creates usable files edits endpoints verifies and uses meaningful exit
       "invalid",
     ]).code,
     1,
+  )
+  cli_cleanup(dir)
+}
+
+///|
+test "CLI planning shares creation options and requires no output path" {
+  let dir = cli_fixture()
+  errdefer cli_cleanup(dir)
+  let planned = execute(["plan", dir + "/input"])
+  assert_eq(planned.code, 0)
+  assert_true(planned.output.contains("swarmcrate.plan.v1"))
+  assert_true(planned.output.contains("\"real_bytes\": \"5\""))
+  assert_eq(execute(["plan", dir + "/input", "extra"]).code, 1)
+  assert_eq(execute(["plan", dir + "/input", "--mode", "invalid"]).code, 1)
+  assert_eq(execute(["plan", dir + "/input", "--piece-length", "17"]).code, 1)
+  assert_eq(execute(["plan", dir + "/input", "--private"]).code, 1)
+  assert_eq(
+    execute([
+      "plan",
+      dir + "/input",
+      "--private",
+      "--tracker",
+      "https://example.org/announce",
+    ]).code,
+    0,
   )
   cli_cleanup(dir)
 }

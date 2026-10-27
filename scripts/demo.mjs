@@ -25,6 +25,7 @@ function run(command, params, filename, expectedCode = 0) {
 }
 for (const mode of ['v1', 'v2', 'hybrid']) {
   const torrent = join(output, `${mode}.torrent`);
+  run('plan', [payload, '--mode', mode, '--piece-length', '16384'], `${mode}-plan.json`);
   run('create', [payload, torrent, '--mode', mode, '--piece-length', '16384'], `${mode}-create.json`);
   run('inspect', [torrent], `${mode}-inspect.json`);
   run('magnet', [torrent], `${mode}.magnet.txt`);
@@ -42,4 +43,4 @@ const edited = join(output, 'hybrid-edited.torrent');
 run('edit', [join(output, 'hybrid.torrent'), edited, '--tracker', 'https://example.org/announce'], 'hybrid-edited.json');
 run('verify', [edited, payload], 'hybrid-edited-verify.json');
 writeFileSync(join(output, 'README.txt'), 'Synthetic payload restored after the damage test. Compare hybrid-pass.html, hybrid-damage.html, and selected-pass.html (only docs/说明.txt was checked while data.bin was damaged). Tracker example.org is a placeholder; no network requests were made.\n');
-console.log(JSON.stringify({ output, created_formats: ['v1', 'v2', 'hybrid'], intact: 'PASS', corruption_detected_at: 16384, selected_file: 'PARTIAL PASS', tracker_edit: 'PASS' }, null, 2));
+console.log(JSON.stringify({ output, planned_formats: ['v1', 'v2', 'hybrid'], created_formats: ['v1', 'v2', 'hybrid'], intact: 'PASS', corruption_detected_at: 16384, selected_file: 'PARTIAL PASS', tracker_edit: 'PASS' }, null, 2));
