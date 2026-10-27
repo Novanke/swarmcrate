@@ -6,7 +6,7 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 ```text
 真实文件/目录 → 分片读取 → MoonBit SHA-1/SHA-256 哈希 → .torrent + magnet
-已有 .torrent + 真实文件 → 格式/布局/哈希核验 → JSON + 离线 HTML 报告
+已有 .torrent + 真实文件 → 格式/布局/哈希核验 → JSON + 离线 HTML + 绑定身份的核验凭据
 ```
 
 核心算法和命令处理由 MoonBit 实现，CLI 的 Node.js 适配层仅负责操作系统 I/O，不调用外部种子生成程序、系统哈希命令或网络服务。库可在 Wasm GC、JavaScript 后端使用，文件系统 CLI 需要 Node.js **22.16+**。没有下载、做种或 Tracker 服务功能。
@@ -40,7 +40,7 @@ node scripts/swarmcrate.mjs plan ./release --mode hybrid --piece-length auto
 node scripts/swarmcrate.mjs create ./release ./release.torrent --mode hybrid --piece-length 262144
 node scripts/swarmcrate.mjs inspect ./release.torrent
 node scripts/swarmcrate.mjs magnet ./release.torrent
-node scripts/swarmcrate.mjs verify ./release.torrent ./release --html ./verification.html
+node scripts/swarmcrate.mjs verify ./release.torrent ./release --receipt ./receipt.json --html ./verification.html
 node scripts/swarmcrate.mjs edit ./release.torrent ./release-new.torrent --tracker https://example.org/announce
 ```
 
@@ -56,6 +56,10 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 
 局部成功在 HTML 中标记为 **PARTIAL PASS**，JSON 的 `complete=false`，不能作为整个资料包通过的证明。v1 跨文件分片还需要相邻文件的部分字节；`required_files` 列出这些依赖。其他分片跳过读取和哈希；不指定 `--file` 则检查全部文件。v2 单片读取失败仅影响该片，后续分片仍会检查。
 
+`--receipt NEW.json` 另存 `swarmcrate.receipt.v1`：绑定完整种子原始字节的 SHA-256、两套 infohash、真实文件索引/路径/长度、所需文件的观测大小及完整核验结果。`outcome` 区分 `PASS`、`PARTIAL_PASS` 和 `FAIL`，失败检查也能保存。标准输出和退出码保持兼容。仅改 Tracker 就会改变完整种子摘要，即使 infohash 不变，旧凭据也只对应原始输入。凭据是普通未签名 JSON，不认证发布者，也不代替未来重新核验；见[凭据字段与范围说明](docs/verification-receipts.md)。
+
+凭据和 HTML 的父目录必须已存在；读取载荷前拒绝已有/重复目标，以及与任意列出载荷文件重叠的目标，包括未选择或缺失文件。读后检测到源文件变化时不写报告。多个输出依次独占写入，不是原子事务；后续 I/O 失败时先前完整输出可能保留。
+
 创建前会复查已扫描的文件和目录清单，空目录也参与检查；新增文件、移除或重命名目录等变化会中止创建，不写出新种子。枚举顺序变化不影响结果。检查仍是顺序执行，制作发布物时请使用稳定源目录。
 
 单文件种子的 `PAYLOAD` 参数直接指向文件；多文件种子指向包含元数据所列相对路径的目录，不额外拼接种子名称。输出必须是新文件，CLI 不覆盖已有文件。`edit` 用所给参数**整体替换** Tracker 和 Web Seed 列表；修改后保留原始 `info` 字节，内容哈希不会改变。
@@ -65,15 +69,15 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.7.0
+node scripts/demo.mjs --output ./artifacts/demo-0.8.0
 ```
 
-默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告，以及指定文件的局部校验报告；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
+默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告及凭据，以及指定文件的局部校验报告与凭据；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
 
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.7.0
+moon add Novanke/swarmcrate@0.8.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -91,6 +95,12 @@ let torrent = @swarm.create_torrent(
 )
 let summary = @swarm.inspect_torrent(torrent)
 println(@swarm.info_json(summary).stringify(indent=2))
+let (report, receipt) = @swarm.verify_with_receipt(
+  torrent, [Some(5L)],
+  fn(_, offset, n) { content[offset.to_int():offset.to_int() + n].to_owned() },
+)
+println(@swarm.verification_json(report).stringify())
+println(@swarm.receipt_json_text(receipt))
 ```
 
 调用方处理 `CrateError(code, detail)`。读取回调必须返回请求的完整字节，创建时的文件索引始终对应输入数组，库内部确定性排序不会改变回调映射。核验时的文件索引对应 `inspect_torrent(...).files`。见 [接口约定](docs/API.md) 和自动生成的 [公开接口](pkg.generated.mbti)。
@@ -102,7 +112,7 @@ moon run examples/library --target wasm-gc --release --deny-warn
 moon run examples/library --target js --release --deny-warn
 ```
 
-示例依次规划并创建 v1、v2、混合种子，输出元数据、磁力链接和完整核验报告，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
+示例依次规划并创建 v1、v2、混合种子，输出元数据、磁力链接、完整核验报告和不可变凭据快照，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
 
 ## 已实现
 
@@ -117,6 +127,7 @@ moon run examples/library --target js --release --deny-warn
 - Tracker 分层、Web Seed、私有标志、注释，以及保留 `info` 精确字节的分发地址编辑。
 - 文件扫描、分段读取、源文件与目录清单复查（含空目录）、拒绝符号链接和特殊文件、独占创建输出。创建期间的新增、移除、重命名与目录替换会触发错误，停止写出过时元数据。
 - 无损尺寸字符串 JSON、离线 HTML 核验报告和六个真实文件命令。
+- 同次核验生成的独立 JSON 凭据，绑定精确种子身份、文件映射、检查范围和结果；调用方修改返回报告的数组不会改写已捕获的凭据。
 
 ## 验证与规模
 
@@ -131,9 +142,9 @@ python -m pip install libtorrent==2.1.1 torf==4.3.1
 python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 ```
 
-当前有 **27 个核心测试块**，JS 加文件系统/CLI 测试共 **34 个测试块**。独立互操作脚本通过 **156 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。
+当前有 **30 个核心测试块**，JS 加文件系统/CLI 测试共 **37 个测试块**。独立互操作脚本通过 **183 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
 
-仅根目录自写库代码：**2,532 行非空非注释源码，1,610 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+仅根目录自写库代码：**2,617 行非空非注释源码，1,658 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
 混合核验的 8 MiB + 3 字节合成对照中，相比注册表 0.4.0，读取量从 16,777,222 降至 8,388,611 字节，回调次数由 66 降至 33，两套哈希检查仍共 66 次。该结果说明读取量减少，不等于 CPU 哈希工作减半；性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 

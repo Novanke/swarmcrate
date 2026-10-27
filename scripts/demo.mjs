@@ -29,13 +29,13 @@ for (const mode of ['v1', 'v2', 'hybrid']) {
   run('create', [payload, torrent, '--mode', mode, '--piece-length', '16384'], `${mode}-create.json`);
   run('inspect', [torrent], `${mode}-inspect.json`);
   run('magnet', [torrent], `${mode}.magnet.txt`);
-  run('verify', [torrent, payload, '--html', join(output, `${mode}-pass.html`)], `${mode}-pass.json`);
+  run('verify', [torrent, payload, '--receipt', join(output, `${mode}-receipt.json`), '--html', join(output, `${mode}-pass.html`)], `${mode}-pass.json`);
 }
 binary[20000] ^= 255;
 writeFileSync(join(payload, 'data.bin'), binary);
-const failure = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--html', join(output, 'hybrid-damage.html')], 'hybrid-damage.json', 2));
+const failure = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--receipt', join(output, 'hybrid-damage-receipt.json'), '--html', join(output, 'hybrid-damage.html')], 'hybrid-damage.json', 2));
 if (failure.failed_pieces !== 2 || failure.failures[0].spans[0].offset !== '16384') throw Error('damage location mismatch');
-const partial = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--file', 'docs/说明.txt', '--html', join(output, 'selected-pass.html')], 'selected-pass.json'));
+const partial = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--file', 'docs/说明.txt', '--receipt', join(output, 'selected-receipt.json'), '--html', join(output, 'selected-pass.html')], 'selected-pass.json'));
 if (!partial.ok || partial.complete || !partial.skipped_pieces) throw Error('selected scope mismatch');
 binary[20000] ^= 255;
 writeFileSync(join(payload, 'data.bin'), binary);

@@ -251,12 +251,15 @@ process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.st
             env = {**os.environ, "SWARM_READ_ROOT": str(payload), "SWARM_READ_RESULT": str(counts)}
             env.pop("SWARM_READ_FAULT", None)
             parts = ["verify", str(torrent), str(payload)]
+            receipt_path = directory / f"reads-{piece}-{selected}-receipt.json"
+            parts += ["--receipt", str(receipt_path)]
             if selected is not None:
                 parts += ["--file", selected]
             result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), *parts],
                                     capture_output=True, text=True, encoding="utf-8", env=env)
             assert result.returncode == 0, result.stderr + result.stdout
             report = json.loads(result.stdout)
+            assert json.loads(receipt_path.read_text(encoding="utf-8"))["verification"] == report
             observed = json.loads(counts.read_text())
             assert report["ok"] and report["checked_pieces"] + report["skipped_pieces"] == total
             assert observed["bytes"] == expected and observed["max_request"] <= 1048576
@@ -267,10 +270,13 @@ process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.st
                 counts = directory / f"fault-{fault}.json"
                 env = {**os.environ, "SWARM_READ_ROOT": str(payload), "SWARM_READ_RESULT": str(counts),
                        "SWARM_READ_FAULT": fault}
-                result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload)],
+                receipt_path = directory / f"fault-{fault}-receipt.json"
+                result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload), "--receipt", str(receipt_path)],
                                         capture_output=True, text=True, encoding="utf-8", env=env)
                 assert result.returncode == 2, result.stderr + result.stdout
                 report = json.loads(result.stdout)
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                assert receipt["verification"] == report and receipt["outcome"] == "FAIL"
                 observed = json.loads(counts.read_text())
                 assert report["checked_pieces"] == total and report["failed_pieces"] == report["unreadable_pieces"] == 2
                 assert [f["scheme"] for f in report["failures"]] == ["sha1", "sha256"]
@@ -333,6 +339,147 @@ def padded_v1_verification(directory):
         assert lt.bencode(lt.bdecode(edited.read_bytes())[b"info"]) == lt.bencode(info)
         assert json.loads(command("verify", edited, payload))["ok"]
         checks += 1
+
+
+def receipt_verification(directory):
+    """Bind exported receipts to independent raw/info hashes and actual file scopes."""
+    global checks
+    payload = directory / "receipt-payload"
+    payload.mkdir()
+    (payload / "a").write_bytes(b"abc")
+    intact = bytes(i % 251 for i in range(32769))
+    (payload / "b").write_bytes(intact)
+    (payload / "empty").write_bytes(b"")
+
+    def verify_receipt(torrent, output, *selection, code=0, html=None):
+        params = ["verify", torrent, payload, *selection, "--receipt", output]
+        if html is not None:
+            params += ["--html", html]
+        report = json.loads(command(*params, code=code))
+        receipt = json.loads(output.read_text(encoding="utf-8"))
+        raw = torrent.read_bytes()
+        reference = lt.torrent_info(lt.bdecode(raw)).info_hashes()
+        info = json.loads(command("inspect", torrent))
+        assert report["schema"] == "swarmcrate.verify.v2"
+        assert receipt["schema"] == "swarmcrate.receipt.v1"
+        assert receipt["verification"] == report
+        subject = receipt["subject"]
+        assert subject["metainfo_sha256"] == hashlib.sha256(raw).hexdigest()
+        assert subject["metainfo_bytes"] == str(len(raw))
+        assert subject["info_hash_v1"] == (str(reference.v1) if reference.has_v1() else None)
+        assert subject["info_hash_v2"] == (str(reference.v2) if reference.has_v2() else None)
+        assert subject["files"] == [dict(index=i, **file) for i, file in enumerate(info["files"])]
+        assert subject["mode"] == info["mode"] and subject["piece_length"] == info["piece_length"]
+        assert subject["single_file"] == info["single_file"]
+        assert receipt["outcome"] == ("FAIL" if not report["ok"] else "PASS" if report["complete"] else "PARTIAL_PASS")
+        assert receipt["observations"] == [
+            {"file": i, "actual_bytes": str(payload.joinpath(*info["files"][i]["path"]).stat().st_size)
+             if payload.joinpath(*info["files"][i]["path"]).is_file() else None}
+            for i in report["required_files"]]
+        assert receipt["is_digital_signature"] is False and receipt["publisher_authenticated"] is False
+        text = output.read_text(encoding="utf-8")
+        assert str(payload) not in text and "private-receipt-fixture" not in text and "https://example.org" not in text
+        if html:
+            assert ("PARTIAL PASS" if receipt["outcome"] == "PARTIAL_PASS" else receipt["outcome"]) in html.read_text(encoding="utf-8")
+        return receipt
+
+    for mode in ["v1", "v2", "hybrid"]:
+        torrent = directory / f"receipt-{mode}.torrent"
+        command("create", payload, torrent, "--mode", mode, "--piece-length", "16384",
+                "--tracker", "https://example.org/announce", "--comment", "private-receipt-fixture")
+        full = verify_receipt(torrent, directory / f"receipt-{mode}-full.json", html=directory / f"receipt-{mode}.html")
+        assert full["verification"] == json.loads(command("verify", torrent, payload))
+        checks += 1
+        partial = verify_receipt(torrent, directory / f"receipt-{mode}-partial.json", "--file", "a", "--file", "a")
+        assert partial["verification"]["selected_files"] == [0]
+        assert partial["verification"]["required_files"] == ([0, 1] if mode == "v1" else [0])
+        assert partial["outcome"] == "PARTIAL_PASS"
+        checks += 1
+        damaged = bytearray(intact)
+        damaged[20000] ^= 255
+        (payload / "b").write_bytes(damaged)
+        try:
+            failed = verify_receipt(torrent, directory / f"receipt-{mode}-failed.json", code=2)
+            assert failed["verification"]["failed_pieces"] == (2 if mode == "hybrid" else 1)
+            assert failed["verification"]["failures"][0]["spans"][0]["offset"] == ("16381" if mode == "v1" else "16384")
+        finally:
+            (payload / "b").write_bytes(intact)
+        checks += 1
+        (payload / "empty").unlink()
+        try:
+            missing = verify_receipt(torrent, directory / f"receipt-{mode}-missing.json", "--file", "empty", code=2)
+            assert missing["verification"]["checked_pieces"] == 0 and missing["outcome"] == "FAIL"
+        finally:
+            (payload / "empty").write_bytes(b"")
+        checks += 1
+        edited = directory / f"receipt-{mode}-edited.torrent"
+        command("edit", torrent, edited, "--tracker", "https://example.org/new")
+        different = verify_receipt(edited, directory / f"receipt-{mode}-edited.json")
+        assert different["subject"]["info_hash_v1"] == full["subject"]["info_hash_v1"]
+        assert different["subject"]["info_hash_v2"] == full["subject"]["info_hash_v2"]
+        assert different["subject"]["metainfo_sha256"] != full["subject"]["metainfo_sha256"]
+        checks += 1
+        single = directory / f"receipt-single-{mode}.torrent"
+        single_output = directory / f"receipt-single-{mode}.json"
+        command("create", payload / "a", single, "--mode", mode)
+        report = json.loads(command("verify", single, payload / "a", "--receipt", single_output))
+        receipt = json.loads(single_output.read_text(encoding="utf-8"))
+        assert receipt["verification"] == report and receipt["subject"]["single_file"]
+        assert receipt["subject"]["files"] == [{"index": 0, "path": ["a"], "length": "3"}]
+        assert receipt["subject"]["metainfo_sha256"] == hashlib.sha256(single.read_bytes()).hexdigest()
+        checks += 1
+
+    # Preflight every destination before payload reads or any report output.
+    blocked = ROOT / "scripts/fixtures/no_payload_reads.mjs"
+    fresh = directory / "preflight-receipt.json"
+    existing = directory / "existing-report.html"
+    existing.write_bytes(b"keep existing output")
+    alias = directory / "same-report.json"
+    empty = payload / "empty"
+    empty.unlink()  # Must not recreate an unselected missing payload as a report.
+    guards = [
+        ["--receipt", fresh, "--html", existing],
+        ["--receipt", alias, "--html", alias.parent / "." / alias.name],
+        ["--receipt", alias, "--html", str(alias).upper()],
+        ["--receipt", empty, "--file", "a"],
+        ["--html", empty, "--file", "a"],
+        ["--receipt", payload],
+        ["--receipt", directory / "no-parent/out.json"],
+        ["--receipt", ""],
+    ]
+    for extra in guards:
+        result = subprocess.run([args.node, "--import", blocked.as_uri(), str(args.cli), "verify", str(torrent), str(payload), *map(str, extra)],
+                                capture_output=True, text=True, encoding="utf-8", env={**os.environ, "SWARM_PLAN_ROOT": str(payload)})
+        assert result.returncode == 1 and json.loads(result.stdout)["error"] == "usage", result.stderr + result.stdout
+        assert not fresh.exists() and not alias.exists() and not empty.exists()
+        assert existing.read_bytes() == b"keep existing output"
+        checks += 1
+    empty.write_bytes(b"")
+
+    # A change detected after the last read must prevent both artifacts from being written.
+    preload = directory / "receipt-changed.mjs"
+    preload.write_text('''import fs from 'node:fs';
+import path from 'node:path';
+const root = path.resolve(process.env.SWARM_RECEIPT_ROOT), observed = new Map();
+const open = fs.openSync, close = fs.closeSync;
+fs.openSync = function(file, ...rest) {
+  const fd = open.call(this, file, ...rest);
+  if (path.resolve(String(file)) === path.join(root, 'b')) observed.set(fd, true);
+  return fd;
+};
+fs.closeSync = function(fd) {
+  const change = observed.delete(fd); const result = close.call(this, fd);
+  if (change) fs.appendFileSync(path.join(root, 'b'), '!');
+  return result;
+};
+''', encoding="utf-8")
+    receipt_path, html_path = directory / "changed-receipt.json", directory / "changed-report.html"
+    result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload),
+                             "--receipt", str(receipt_path), "--html", str(html_path)],
+                            capture_output=True, text=True, encoding="utf-8", env={**os.environ, "SWARM_RECEIPT_ROOT": str(payload)})
+    assert result.returncode == 1 and json.loads(result.stdout)["error"] == "changed", result.stderr + result.stdout
+    assert not receipt_path.exists() and not html_path.exists()
+    checks += 1
 
 
 def selected_verification(directory, bundle, mode):
@@ -456,6 +603,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     single_pass_hybrid_verification(directory)
     source_snapshot_verification(directory)
     creation_planning(directory)
+    receipt_verification(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))

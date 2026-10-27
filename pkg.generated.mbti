@@ -36,6 +36,8 @@ pub fn plan_json(TorrentPlan) -> Json
 
 pub fn plan_torrent(Array[SourceFile], CreateOptions) -> TorrentPlan raise CrateError
 
+pub fn receipt_json_text(VerificationReceipt) -> String
+
 pub fn recommend_piece_length(Array[SourceFile], mode? : TorrentMode, target_pieces? : Int32) -> Int32 raise CrateError
 
 pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
@@ -59,6 +61,8 @@ pub fn verification_json(VerificationReport) -> Json
 pub fn verification_scope(Bytes, selected_files? : Array[Int32]?) -> VerificationScope raise CrateError
 
 pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> VerificationReport raise CrateError
+
+pub fn verify_with_receipt(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> (VerificationReport, VerificationReceipt) raise CrateError
 
 // Errors
 pub(all) suberror CrateError {
@@ -153,6 +157,10 @@ pub(all) struct TorrentPlan {
 pub(all) struct V2FileHash {
   root : Bytes
   piece_layer : Bytes
+}
+
+pub struct VerificationReceipt {
+  // private fields
 }
 
 pub(all) struct VerificationReport {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 — 2026-10-27
+
+- Add `verify_with_receipt` and opaque `VerificationReceipt` with immutable `receipt_json_text` export. Capture full raw-metainfo SHA-256/byte count, infohashes, real-file index/path/length mapping, required-file size observations and the exact report from one verification. Copy caller sizes before callbacks; later report-array mutations cannot change the captured receipt.
+- Add optional CLI `verify --receipt NEW.json` (`swarmcrate.receipt.v1`) while preserving legacy `swarmcrate.verify.v2` stdout and exit codes. Export full PASS, PARTIAL_PASS and FAIL distinctly, including missing empty files, unreadable pieces and truncated diagnostics. Do not claim signing, publisher authentication, trusted timestamps or saved-receipt revalidation.
+- Preflight report destinations before payload reads. Reject existing or normalized/case-folded duplicate targets, missing parents and overlap with listed payload files, including missing/unselected files. Recheck required files before writing either artifact; receipt/HTML outputs are individually exclusive but not an atomic pair.
+- Pass 30 core / 37 JS test blocks and 183 independent real-file scenarios. Added scenarios compare exact identity with Python/libtorrent, preserve tracker-edit infohash semantics, check file maps/scopes, single-file layouts, output guards and changes after reads. Existing OS read/fault observations now also export receipts, demonstrating no second payload pass.
+- Extend both portable examples and the disk demo with saved receipts, document the schema, and advance the roadmap's next milestone to per-file diagnostics and actionable ranges.
+
 ## 0.7.0 — 2026-10-27
 
 - Add portable `plan_torrent(files, options)`, `TorrentPlan` and `plan_json` (`swarmcrate.plan.v1`). Compute real/logical bytes, virtual hybrid padding, empty-file counts, both scheme piece counts, exact v1 hash bytes and a v2 piece-layer upper bound without payload reads or hashes.

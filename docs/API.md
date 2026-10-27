@@ -25,6 +25,8 @@ The root package is portable MoonBit, tested on Wasm GC and JavaScript. `/host` 
 | `parse_magnet(uri)` / `format_magnet(value)` | v1 hex/Base32 input, v2 `1220` SHA-256 multihash; reject conflicting hashes, invalid escapes and invalid UTF-8. |
 | `edit_distribution(data, trackers, webSeeds)` | Replace both lists, preserve unknown top-level fields and exact original `info` bytes; private inputs must retain trackers. |
 | `info_json`, `verification_json`, `verification_html` | Schema-tagged data and escaped, script-free offline report. |
+| `verify_with_receipt(data, lengths, read, detail_limit=4096, selected_files=None)` | Return `(VerificationReport, VerificationReceipt)` from the same parsed input and verification. Capture exact full-metainfo SHA-256 and copy caller sizes before read callbacks. |
+| `receipt_json_text(receipt)` | Return the immutable `swarmcrate.receipt.v1` JSON snapshot; private receipt fields prevent external construction from unrelated report/subject objects. This is not a signature or saved-receipt revalidation API. |
 
 `CrateError(code, detail)` is a structured checked error. Missing or incorrectly sized empty files still fail verification, even though they contain no pieces. Read failures are unreadable failures, never trusted zero data. A v2 read error affects only the current piece and checking continues at the next piece; a v1 boundary piece lists all contributing real ranges. Piece counts in a hybrid report count both SHA-1 and SHA-256 checks. Detail limits cap stored piece failure entries; aggregate counters continue through the whole payload.
 
@@ -51,6 +53,14 @@ Tracker ordering is retained as tiers. Web Seeds use BEP 19 `url-list`. Private 
 From 0.4.0, standalone v1 multifile inputs also accept BEP 47 `attr="p"` padding. Each padding entry must fill the remainder of an already partial piece (positive length strictly below the piece length). Trailing padding is accepted; padding does not require every subsequent real file to be aligned. Its path may be omitted; present paths must have 1..32 safe components, but may repeat and are never accessed on disk. Only real files appear in `TorrentInfo.files`, `sizes`, read callback indices, selections and failure spans. `torrent_storage_bytes` and expected SHA-1 counts include the virtual zero bytes. At most 65,536 **storage entries including padding** and 400,000 storage pieces are accepted. The creator continues producing unpadded standalone v1 output.
 
 This is a deliberate subset of BEP 47, not full extended-attribute support. Unknown attributes, attribute combinations, symlink targets and single-file attributes other than empty are rejected. In particular, single-file link attributes that older versions ignored now raise a metainfo error. Padding paths never become filesystem requests; real `.pad` source paths remain reserved.
+
+## Verification receipts (portable core, optional CLI export)
+
+From 0.8.0, optional CLI `verify --receipt NEW.json` saves an identity/scope-bound snapshot, while stdout remains `swarmcrate.verify.v2` and exit codes remain unchanged. Receipts are also saved for failed verification (exit 2). Full raw metainfo SHA-256, infohashes, the complete real-file map, required-file observed sizes, and the same report are captured together; `PASS`, `PARTIAL_PASS` and `FAIL` stay distinct. The file map does not imply all files were checked, and a required v1 neighbour is only checked where it contributes to selected pieces.
+
+The receipt factory copies size inputs before callbacks and serializes before returning mutable report arrays. The caller must still supply stable, honest storage. There is no signing, publisher authentication, trusted timestamp, cached-verification claim, or imported-receipt validation. Exact metainfo identity changes after a tracker-only edit even though infohashes remain unchanged. No local absolute paths, stat tokens, trackers, web seeds or comments are exported. See the [receipt schema and workflow](verification-receipts.md).
+
+CLI report outputs are preflighted before payload reads: existing paths, normalized/case-folded duplicate destinations, missing parents and overlap with any listed payload path are rejected. This conservatively includes missing/unselected payload files and may reject distinct case-sensitive names. Required-file consistency checks complete before either output; detected source changes abort with exit 1 and no receipt or HTML. Receipt and HTML are written sequentially with exclusive creation, not as an atomic pair; a later I/O error can leave an earlier complete output. Sequential filesystem checks remain subject to the stability limitations above.
 
 ## Filesystem scan snapshots (JavaScript only)
 

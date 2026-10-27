@@ -223,6 +223,17 @@ pub fn verify_payload(
   selected_files~ : Array[Int32]? = None,
 ) -> VerificationReport raise CrateError {
   let parsed = parse_torrent(torrent)
+  verify_parsed(parsed, lengths, read, detail_limit, selected_files)
+}
+
+///|
+fn verify_parsed(
+  parsed : ParsedTorrent,
+  lengths : Array[Int64?],
+  read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  detail_limit : Int32,
+  selected_files : Array[Int32]?,
+) -> VerificationReport raise CrateError {
   let plan = plan_verification(parsed, selected_files)
   if lengths.length() != parsed.summary.files.length() ||
     detail_limit < 1 ||

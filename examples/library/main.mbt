@@ -35,7 +35,7 @@ fn main {
       println(@swarm.plan_json(planned).stringify())
       let torrent = @swarm.create_torrent(files, options, read)
       let summary = @swarm.inspect_torrent(torrent)
-      let report = @swarm.verify_payload(
+      let (report, receipt) = @swarm.verify_with_receipt(
         torrent,
         [Some(content.length().to_int64())],
         read,
@@ -54,6 +54,7 @@ fn main {
       println(@swarm.info_json(summary).stringify())
       println(@swarm.torrent_magnet(torrent))
       println(@swarm.verification_json(report).stringify())
+      println(@swarm.receipt_json_text(receipt))
     }
     println(
       "PASS: all three modes created, inspected and verified; corruption detected",

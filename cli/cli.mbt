@@ -182,6 +182,48 @@ fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
 }
 
 ///|
+fn output_key(path : String) -> String raise @lib.CrateError {
+  @host.resolve(path)
+  .split("\\")
+  .map(fn(s) { s.to_owned() })
+  .to_array()
+  .join("/")
+  .to_lower()
+}
+
+///|
+fn preflight_reports(
+  outputs : Array[String],
+  payload_paths : Array[String],
+) -> Unit raise @lib.CrateError {
+  if outputs.is_empty() {
+    return
+  }
+  let keys : Map[String, Bool] = Map([])
+  let payload_keys = payload_paths.map(output_key)
+  for output in outputs {
+    let key = output_key(output)
+    if keys.contains(key) {
+      fail("report outputs must use distinct paths")
+    }
+    keys[key] = true
+    for payload in payload_keys {
+      if key == payload ||
+        key.has_prefix(payload + "/") ||
+        payload.has_prefix(key + "/") {
+        fail("report output overlaps a listed payload path: " + output)
+      }
+    }
+    if @host.stat(output).kind != "missing" {
+      fail("report output already exists: " + output)
+    }
+    if @host.stat(@host.resolve(output) + "/..").kind != "directory" {
+      fail("report output parent must be an existing directory: " + output)
+    }
+  }
+}
+
+///|
 fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
   arity(args, 2)
   let torrent = @host.read_metainfo(args.positionals[0])
@@ -213,6 +255,19 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
       root + "/" + f.path.join("/")
     }
   })
+  let html = one(args, "--html", "")
+  let receipt_path = one(args, "--receipt", "")
+  if args.values.contains("--receipt") && receipt_path == "" {
+    fail("--receipt requires a nonempty output path")
+  }
+  let outputs : Array[String] = []
+  if receipt_path != "" {
+    outputs.push(receipt_path)
+  }
+  if html != "" {
+    outputs.push(html)
+  }
+  preflight_reports(outputs, paths)
   let stats : Array[@host.FileStat?] = Array::make(paths.length(), None)
   let sizes : Array[Int64?] = Array::make(paths.length(), None)
   for i in scope.required_files {
@@ -220,18 +275,26 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
     stats[i] = Some(stat)
     sizes[i] = if stat.kind == "file" { Some(stat.length) } else { None }
   }
-  let report = @lib.verify_payload(
-    torrent,
-    sizes,
-    (i, offset, n) => {
-      @host.read_range(paths[i], offset, n, stamp=stats[i].unwrap().stamp)
-    },
-    selected_files=selected,
-  )
+  let read = fn(i : Int32, offset : Int64, n : Int32) raise @lib.CrateError {
+    @host.read_range(paths[i], offset, n, stamp=stats[i].unwrap().stamp)
+  }
+  let (report, receipt) = if receipt_path != "" {
+    let (report, receipt) = @lib.verify_with_receipt(
+      torrent,
+      sizes,
+      read,
+      selected_files=selected,
+    )
+    (report, Some(receipt))
+  } else {
+    (@lib.verify_payload(torrent, sizes, read, selected_files=selected), None)
+  }
   for i in scope.required_files {
     @host.check_unchanged(paths[i], stats[i].unwrap())
   }
-  let html = one(args, "--html", "")
+  if receipt is Some(receipt) {
+    @host.write_new(receipt_path, @utf8.encode(@lib.receipt_json_text(receipt)))
+  }
   if html != "" {
     @host.write_new(html, @utf8.encode(@lib.verification_html(info, report)))
   }
@@ -259,15 +322,16 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.7.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.8.0 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
-      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--html REPORT.html]\n" +
+      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--html REPORT.html]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
       "Create defaults to auto piece sizing (aims for 4096 pieces, accounts for v2/hybrid file alignment). Use an explicit byte count for a fixed layout.\n" +
       "Plan reads filesystem metadata only: no payload hashes or output files. Piece-layer bytes are an upper bound, not total metainfo size.\n" +
       "--file selects exact inspected paths (use /). V1 shared boundary pieces can require neighbour files. Partial success is not a full-payload certificate.\n" +
+      "--receipt saves unsigned JSON bound to the exact metainfo SHA-256, infohash, file mapping and checked scope; stdout stays swarmcrate.verify.v2.\n" +
       "Outputs are new files; existing files are never overwritten. Exit: 0 success, 1 input/I/O error, 2 failed verification.\n" +
       "Core library: Wasm GC and JS. Filesystem CLI: Node.js >=22.16. No network operations.",
     }
@@ -287,7 +351,8 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
         create(parsed)
       }
     }
-    "verify" => verify(parse_args(args, ["--html", "--file"], false))
+    "verify" =>
+      verify(parse_args(args, ["--html", "--file", "--receipt"], false))
     "inspect" | "magnet" => {
       let parsed = parse_args(args, [], false)
       arity(parsed, 1)
