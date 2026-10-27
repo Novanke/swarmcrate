@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 — 2026-10-28
+
+- Group recorded failures by real file, union adjacent/overlapping physical intervals, and deduplicate hybrid SHA-1/SHA-256 ranges. Separate candidate hash-mismatch/unreadable-piece ranges, missing content, extra tails and the union of expected-content attention ranges. Preserve missing-empty-file issues without inventing bytes or locating an exact failing read from a shared v1 piece.
+- Add immutable `receipt_diagnostics_json_text`, independent CLI `--diagnostics NEW.json` (`swarmcrate.diagnostics.v1`), an additive `file_diagnostics` receipt field and a grouped HTML table. Bind the export to the same exact metainfo identity, file indices, required/selected scope and counters; keep legacy stdout, APIs and exit codes compatible.
+- Add CLI `--detail-limit 1..10000`. Continue all selected checks and aggregate counts; mark every diagnostic inventory incomplete when failure details are truncated, including rows with no recorded issue. File-size issues remain exhaustive. Never treat candidates as exact corrupt bytes or modify payloads automatically.
+- Extend destination preflight and post-read consistency checks to diagnostic outputs. Preserve independent exclusive writes and the documented non-atomic ordering of receipt, diagnostics and HTML.
+- Pass 34 core / 41 JS test blocks and 215 independent disk scenarios. Added checks cover byte-bitmap interval oracles, 64-bit offsets, shared neighbours, missing/short/long files, empty files, truncation, independent padded v1 input and output guards. OS fault/read observations now export diagnostics too, preserving one payload pass and deduplicated unreadable ranges.
+
 ## 0.8.0 — 2026-10-27
 
 - Add `verify_with_receipt` and opaque `VerificationReceipt` with immutable `receipt_json_text` export. Capture full raw-metainfo SHA-256/byte count, infohashes, real-file index/path/length mapping, required-file size observations and the exact report from one verification. Copy caller sizes before callbacks; later report-array mutations cannot change the captured receipt.

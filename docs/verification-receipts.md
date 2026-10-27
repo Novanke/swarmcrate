@@ -37,6 +37,8 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --file docs/manua
 
 ## MoonBit API 与一致性
 
+从 0.9.0 起，新凭据附带 `file_diagnostics`，可用 `receipt_diagnostics_json_text(receipt)` 或 CLI `--diagnostics NEW.json` 单独导出；HTML 也展示按文件汇总。此附加字段使用 `swarmcrate.diagnostics.v1`，0.8.0 历史凭据没有此字段。区间并集、缺失/额外尾部、截断和 v1 邻居歧义见[按文件诊断说明](file-diagnostics.md)。多个输出依次为凭据、诊断、HTML，各文件独占新建，多个文件之间不是原子事务。
+
 `verify_with_receipt(torrent, lengths, read, detail_limit=4096, selected_files=None)` 返回 `(VerificationReport, VerificationReceipt)`；`receipt_json_text(receipt)` 导出快照字符串。`VerificationReceipt` 字段私有，外部调用方不能用一份任意报告与另一份元数据手工组装它。
 
 工厂先解析同一份种子并捕获完整摘要，复制调用方的大小映射，再执行原有核验流程；回调修改原始大小数组不会改写本次映射。返回前序列化结果，因此之后修改返回报告的数组也不会改变凭据。库依赖调用方提供稳定、真实的内容和大小；内存快照不构成不可信调用方的真实性保证。旧 `verify_payload`、JSON 和 HTML 接口继续可用。完整可运行示例见 `examples/library`，在 Wasm GC 和 JS 执行。

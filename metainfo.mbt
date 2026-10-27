@@ -148,7 +148,7 @@ fn read_web_seeds(top : BNode) -> Array[String] raise CrateError {
 
 ///|
 fn top_fields(info : BNode, options : CreateOptions) -> Array[(String, BNode)] {
-  let fields = [("info", info), ("created by", bn_text("SwarmCrate 0.8.0"))]
+  let fields = [("info", info), ("created by", bn_text("SwarmCrate 0.9.0"))]
   if !options.trackers.is_empty() {
     fields.push(("announce", bn_text(options.trackers[0][0])))
     fields.push(

@@ -54,6 +54,14 @@ From 0.4.0, standalone v1 multifile inputs also accept BEP 47 `attr="p"` padding
 
 This is a deliberate subset of BEP 47, not full extended-attribute support. Unknown attributes, attribute combinations, symlink targets and single-file attributes other than empty are rejected. In particular, single-file link attributes that older versions ignored now raise a metainfo error. Padding paths never become filesystem requests; real `.pad` source paths remain reserved.
 
+## Per-file candidate ranges
+
+From 0.9.0, `receipt_diagnostics_json_text(receipt)` exports immutable `swarmcrate.diagnostics.v1` JSON, also embedded as the additive `file_diagnostics` field in new `swarmcrate.receipt.v1` receipts. CLI `verify --diagnostics NEW.json` exports it independently of `--receipt`; HTML includes the grouped table. Outputs share preflight and post-read consistency checks; stdout and exit codes stay unchanged.
+
+Rows cover only required files and retain original indices/paths, distinguishing selected files from v1 boundary dependencies. Adjacent/overlapping physical ranges are unioned per category and across both hash schemes. Missing content and extra tails are separate; the attention union excludes extra bytes beyond expected content. Missing empty files retain issues with no byte interval. Hash-mismatch and unreadable-piece ranges are candidates, not exact corrupt-byte or failed-read locations; a shared v1 piece cannot identify the file causing a read failure.
+
+`--detail-limit N` selects 1..10000 stored failure checks (default 4096), without limiting actual selected-scope checking or aggregate counts. Truncation makes every row's `ranges_complete=false`; recorded file counts/ranges may omit problems, and an empty row is not evidence of success. Size issues remain exhaustive. See [diagnostic schema and examples](file-diagnostics.md) for size-mismatch read policy, 64-bit string offsets and range semantics.
+
 ## Verification receipts (portable core, optional CLI export)
 
 From 0.8.0, optional CLI `verify --receipt NEW.json` saves an identity/scope-bound snapshot, while stdout remains `swarmcrate.verify.v2` and exit codes remain unchanged. Receipts are also saved for failed verification (exit 2). Full raw metainfo SHA-256, infohashes, the complete real-file map, required-file observed sizes, and the same report are captured together; `PASS`, `PARTIAL_PASS` and `FAIL` stay distinct. The file map does not imply all files were checked, and a required v1 neighbour is only checked where it contributes to selected pieces.

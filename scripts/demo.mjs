@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -33,8 +33,11 @@ for (const mode of ['v1', 'v2', 'hybrid']) {
 }
 binary[20000] ^= 255;
 writeFileSync(join(payload, 'data.bin'), binary);
-const failure = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--receipt', join(output, 'hybrid-damage-receipt.json'), '--html', join(output, 'hybrid-damage.html')], 'hybrid-damage.json', 2));
+const failure = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--receipt', join(output, 'hybrid-damage-receipt.json'), '--diagnostics', join(output, 'hybrid-diagnostics.json'), '--html', join(output, 'hybrid-damage.html')], 'hybrid-damage.json', 2));
 if (failure.failed_pieces !== 2 || failure.failures[0].spans[0].offset !== '16384') throw Error('damage location mismatch');
+const diagnostics = JSON.parse(readFileSync(join(output, 'hybrid-diagnostics.json'), 'utf8'));
+const damagedFile = diagnostics.files.find(file => file.path.join('/') === 'data.bin');
+if (damagedFile.attention_bytes !== '16384' || damagedFile.attention_ranges.length !== 1 || !diagnostics.ranges_complete) throw Error('per-file range union mismatch');
 const partial = JSON.parse(run('verify', [join(output, 'hybrid.torrent'), payload, '--file', 'docs/说明.txt', '--receipt', join(output, 'selected-receipt.json'), '--html', join(output, 'selected-pass.html')], 'selected-pass.json'));
 if (!partial.ok || partial.complete || !partial.skipped_pieces) throw Error('selected scope mismatch');
 binary[20000] ^= 255;

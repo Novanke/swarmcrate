@@ -252,7 +252,8 @@ process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.st
             env.pop("SWARM_READ_FAULT", None)
             parts = ["verify", str(torrent), str(payload)]
             receipt_path = directory / f"reads-{piece}-{selected}-receipt.json"
-            parts += ["--receipt", str(receipt_path)]
+            diagnostics_path = directory / f"reads-{piece}-{selected}-diagnostics.json"
+            parts += ["--receipt", str(receipt_path), "--diagnostics", str(diagnostics_path)]
             if selected is not None:
                 parts += ["--file", selected]
             result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), *parts],
@@ -260,6 +261,7 @@ process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.st
             assert result.returncode == 0, result.stderr + result.stdout
             report = json.loads(result.stdout)
             assert json.loads(receipt_path.read_text(encoding="utf-8"))["verification"] == report
+            assert json.loads(diagnostics_path.read_text(encoding="utf-8")) == json.loads(receipt_path.read_text(encoding="utf-8"))["file_diagnostics"]
             observed = json.loads(counts.read_text())
             assert report["ok"] and report["checked_pieces"] + report["skipped_pieces"] == total
             assert observed["bytes"] == expected and observed["max_request"] <= 1048576
@@ -271,12 +273,17 @@ process.on('exit', () => fs.writeFileSync(process.env.SWARM_READ_RESULT, JSON.st
                 env = {**os.environ, "SWARM_READ_ROOT": str(payload), "SWARM_READ_RESULT": str(counts),
                        "SWARM_READ_FAULT": fault}
                 receipt_path = directory / f"fault-{fault}-receipt.json"
-                result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload), "--receipt", str(receipt_path)],
+                diagnostics_path = directory / f"fault-{fault}-diagnostics.json"
+                result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload), "--receipt", str(receipt_path), "--diagnostics", str(diagnostics_path)],
                                         capture_output=True, text=True, encoding="utf-8", env=env)
                 assert result.returncode == 2, result.stderr + result.stdout
                 report = json.loads(result.stdout)
                 receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                 assert receipt["verification"] == report and receipt["outcome"] == "FAIL"
+                diagnostic = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+                assert diagnostic == receipt["file_diagnostics"]
+                assert diagnostic["files"][0]["unreadable_ranges"] == [{"offset": "0", "length": "2097152"}]
+                assert diagnostic["files"][0]["attention_bytes"] == "2097152"
                 observed = json.loads(counts.read_text())
                 assert report["checked_pieces"] == total and report["failed_pieces"] == report["unreadable_pieces"] == 2
                 assert [f["scheme"] for f in report["failures"]] == ["sha1", "sha256"]
@@ -474,12 +481,152 @@ fs.closeSync = function(fd) {
 };
 ''', encoding="utf-8")
     receipt_path, html_path = directory / "changed-receipt.json", directory / "changed-report.html"
+    diagnostics_path = directory / "changed-diagnostics.json"
     result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli), "verify", str(torrent), str(payload),
-                             "--receipt", str(receipt_path), "--html", str(html_path)],
+                             "--receipt", str(receipt_path), "--html", str(html_path), "--diagnostics", str(diagnostics_path)],
                             capture_output=True, text=True, encoding="utf-8", env={**os.environ, "SWARM_RECEIPT_ROOT": str(payload)})
     assert result.returncode == 1 and json.loads(result.stdout)["error"] == "changed", result.stderr + result.stdout
-    assert not receipt_path.exists() and not html_path.exists()
+    assert not receipt_path.exists() and not html_path.exists() and not diagnostics_path.exists()
     checks += 1
+
+
+def file_diagnostics_verification(directory):
+    """Exercise grouped physical ranges, incomplete inventories and guarded outputs."""
+    global checks
+    payload = directory / "diagnostic-payload"
+    payload.mkdir()
+    data = bytes(i % 251 + 1 for i in range(65537))
+    (payload / "a").write_bytes(b"abc")
+    (payload / "b").write_bytes(data)
+    (payload / "c").write_bytes(b"content")
+    (payload / "empty").write_bytes(b"")
+    for mode in ["v1", "v2", "hybrid"]:
+        torrent = directory / f"diagnostic-{mode}.torrent"
+        command("create", payload, torrent, "--mode", mode, "--piece-length", "16384")
+        hashes = lt.torrent_info(lt.bdecode(torrent.read_bytes())).info_hashes()
+
+        def run(suffix, *options, code=0):
+            prefix = directory / f"diagnostic-{mode}-{suffix}"
+            sidecar, receipt, html = prefix.with_suffix(".json"), prefix.with_suffix(".receipt.json"), prefix.with_suffix(".html")
+            report = json.loads(command("verify", torrent, payload, *options, "--diagnostics", sidecar, "--receipt", receipt, "--html", html, code=code))
+            exported = json.loads(receipt.read_text(encoding="utf-8"))
+            diagnostic = json.loads(sidecar.read_text(encoding="utf-8"))
+            assert exported["verification"] == report and exported["file_diagnostics"] == diagnostic
+            assert diagnostic["schema"] == "swarmcrate.diagnostics.v1"
+            assert diagnostic["metainfo_sha256"] == hashlib.sha256(torrent.read_bytes()).hexdigest()
+            assert diagnostic["info_hash_v1"] == (str(hashes.v1) if hashes.has_v1() else None)
+            assert diagnostic["info_hash_v2"] == (str(hashes.v2) if hashes.has_v2() else None)
+            for key in ["ok", "complete", "selected_files", "required_files", "checked_pieces", "skipped_pieces", "failed_pieces", "unreadable_pieces", "details_truncated"]:
+                assert diagnostic[key] == report[key]
+            assert diagnostic["ranges_complete"] == (not report["details_truncated"])
+            assert diagnostic["omitted_failure_checks"] == report["failed_pieces"] - len(report["failures"])
+            assert [f["file"] for f in diagnostic["files"]] == report["required_files"]
+            for file in diagnostic["files"]:
+                assert file["selected"] == (file["file"] in report["selected_files"])
+                assert file["ranges_complete"] == diagnostic["ranges_complete"]
+                actual = payload.joinpath(*file["path"])
+                assert file["actual_bytes"] == (str(actual.stat().st_size) if actual.is_file() else None)
+                for kind in ["hash_mismatch", "unreadable", "missing", "extra", "attention"]:
+                    end = -1
+                    for interval in file[kind + "_ranges"]:
+                        offset, length = int(interval["offset"]), int(interval["length"])
+                        assert offset > end and length > 0
+                        end = offset + length
+                        assert end <= int(file["expected_bytes"]) if kind != "extra" else offset >= int(file["expected_bytes"])
+                    assert int(file[kind + "_bytes"]) == sum(int(r["length"]) for r in file[kind + "_ranges"])
+            assert "Per-file attention ranges" in html.read_text(encoding="utf-8")
+            assert ("INCOMPLETE" in html.read_text(encoding="utf-8")) == report["details_truncated"]
+            return report, diagnostic, {f["file"]: f for f in diagnostic["files"]}
+
+        intact, diagnostic, rows = run("intact")
+        assert intact == json.loads(command("verify", torrent, payload))
+        assert diagnostic["files_with_recorded_issues"] == 0
+        checks += 1
+        damaged = bytearray(data)
+        damaged[20000] ^= 255
+        damaged[40000] ^= 255
+        (payload / "b").write_bytes(damaged)
+        report, diagnostic, rows = run("damage", code=2)
+        offset = 16381 if mode == "v1" else 16384
+        assert rows[1]["hash_mismatch_ranges"] == [{"offset": str(offset), "length": "32768"}]
+        assert rows[1]["attention_bytes"] == "32768"  # Four hybrid hash failures, two physical pieces.
+        assert diagnostic["files_with_recorded_issues"] == 1
+        checks += 1
+        report, diagnostic, rows = run("subset-good", "--file", "a")
+        assert report["ok"] and not report["complete"] and diagnostic["ranges_complete"]
+        assert list(rows) == ([0, 1] if mode == "v1" else [0])
+        if mode == "v1":
+            assert not rows[1]["selected"] and not rows[1]["has_recorded_issue"]
+        checks += 1
+        report, diagnostic, rows = run("subset-damage", "--file", "b", code=2)
+        assert not report["complete"] and rows[1]["attention_bytes"] == "32768"
+        checks += 1
+        (payload / "b").write_bytes(data)
+        (payload / "c").unlink()
+        (payload / "empty").unlink()
+        report, diagnostic, rows = run("missing", code=2)
+        assert rows[2]["missing_ranges"] == [{"offset": "0", "length": "7"}]
+        assert rows[3]["has_recorded_issue"] and rows[3]["attention_ranges"] == []
+        assert rows[3]["size_issue"] == "missing"
+        assert rows[1]["unreadable_bytes"] == ("4" if mode == "v1" else "0")
+        checks += 1
+        (payload / "c").write_bytes(b"content++")
+        (payload / "empty").write_bytes(b"")
+        (payload / "b").write_bytes(data[:20000])
+        report, diagnostic, rows = run("sizes", code=2)
+        assert rows[1]["missing_ranges"] == [{"offset": "20000", "length": "45537"}]
+        assert rows[1]["unreadable_bytes"] == rows[1]["attention_bytes"] == "65537"
+        assert rows[2]["extra_ranges"] == [{"offset": "7", "length": "2"}]
+        assert rows[2]["attention_bytes"] == "7"
+        assert (payload / "b").read_bytes() == data[:20000] and (payload / "c").read_bytes() == b"content++"
+        checks += 1
+        (payload / "b").write_bytes(bytes(len(data)))
+        (payload / "c").write_bytes(b"changed")
+        report, diagnostic, rows = run("truncated", "--detail-limit", "1", code=2)
+        assert report["details_truncated"] and not diagnostic["ranges_complete"]
+        assert diagnostic["omitted_failure_checks"] > 0
+        assert not rows[2]["has_recorded_issue"] and not rows[2]["ranges_complete"]  # Omitted does not mean passed.
+        checks += 1
+        (payload / "b").write_bytes(data)
+        (payload / "c").write_bytes(b"content")
+
+    # Independent padded v1 metadata: diagnostic file indices must exclude virtual padding.
+    padded = directory / "diagnostic-padded"
+    padded.mkdir()
+    (padded / "a").write_bytes(b"abc")
+    (padded / "b").write_bytes(b"FAIL")
+    stream = b"abc" + bytes(16381) + b"pass"
+    info = {b"name": b"padded", b"piece length": 16384,
+            b"files": [{b"path": [b"a"], b"length": 3}, {b"attr": b"p", b"length": 16381}, {b"path": [b"b"], b"length": 4}],
+            b"pieces": b"".join(hashlib.sha1(stream[i:i+16384]).digest() for i in range(0, len(stream), 16384))}
+    pad_torrent, pad_output = directory / "diagnostic-padded.torrent", directory / "diagnostic-padded.json"
+    pad_torrent.write_bytes(lt.bencode({b"info": info}))
+    lt.torrent_info(str(pad_torrent))
+    command("verify", pad_torrent, padded, "--diagnostics", pad_output, code=2)
+    result = json.loads(pad_output.read_text(encoding="utf-8"))
+    assert [f["path"] for f in result["files"]] == [["a"], ["b"]]
+    assert result["files"][1]["attention_ranges"] == [{"offset": "0", "length": "4"}]
+    assert not (padded / ".pad").exists()
+    checks += 1
+    # All three artifact paths share preflight policy, before payload reads/writes.
+    fresh = directory / "diagnostic-new.json"
+    existing = directory / "diagnostic-existing.json"
+    existing.write_bytes(b"preserve")
+    (payload / "empty").unlink()
+    guards = [["--diagnostics", existing, "--receipt", fresh],
+              ["--diagnostics", fresh, "--receipt", fresh],
+              ["--diagnostics", fresh, "--html", str(fresh).upper()],
+              ["--diagnostics", payload / "empty", "--file", "a"],
+              ["--diagnostics", directory / "no-parent/diagnostic.json"], ["--diagnostics", ""]]
+    guards += [["--diagnostics", fresh, "--detail-limit", value] for value in ["0", "10001", "bad", "-1"]]
+    for options in guards:
+        result = subprocess.run([args.node, "--import", (ROOT / "scripts/fixtures/no_payload_reads.mjs").as_uri(), str(args.cli),
+                                 "verify", str(torrent), str(payload), *map(str, options)], capture_output=True, text=True, encoding="utf-8",
+                                env={**os.environ, "SWARM_PLAN_ROOT": str(payload)})
+        assert result.returncode == 1 and json.loads(result.stdout)["error"] == "usage", result.stderr + result.stdout
+        assert not fresh.exists() and not (payload / "empty").exists()
+        assert existing.read_bytes() == b"preserve"
+        checks += 1
 
 
 def selected_verification(directory, bundle, mode):
@@ -604,6 +751,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     source_snapshot_verification(directory)
     creation_planning(directory)
     receipt_verification(directory)
+    file_diagnostics_verification(directory)
     # Chunk batching must not change leaves, final piece padding or file roots.
     large = directory / "large.bin"
     large.write_bytes(rng.randbytes(2097169))

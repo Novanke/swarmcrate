@@ -237,10 +237,11 @@ pub fn verification_html(
   "<h2>File issues</h2><table><tr><th>File</th><th>Reason</th><th>Expected bytes</th><th>Actual bytes</th></tr>" +
   rows.join("") +
   "</table>" +
+  file_diagnostics_html(info, report) +
   "<h2>Piece failures</h2><table><tr><th>Scheme</th><th>Index (zero-based)</th><th>Reason</th><th>File @ offset + length</th></tr>" +
   pieces.join("") +
   "</table>" +
-  "<small>SwarmCrate 0.8.0 · Hash checks show consistency with this metainfo, not publisher authenticity. Detail list truncated: " +
+  "<small>SwarmCrate 0.9.0 · Hash checks show consistency with this metainfo, not publisher authenticity. Detail list truncated: " +
   report.details_truncated.to_string() +
   ".</small></html>"
 }

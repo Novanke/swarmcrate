@@ -44,6 +44,24 @@ test "CLI creates usable files edits endpoints verifies and uses meaningful exit
       0,
     )
     assert_eq(execute(["verify", torrent, dir + "/missing"]).code, 2)
+    let diagnostic_path = dir + "/" + mode + "-diagnostics.json"
+    let diagnosed = execute([
+      "verify",
+      torrent,
+      dir + "/input",
+      "--diagnostics",
+      diagnostic_path,
+    ])
+    assert_eq(diagnosed.code, 0)
+    assert_eq(
+      diagnosed.output,
+      execute(["verify", torrent, dir + "/input"]).output,
+    )
+    assert_true(
+      @utf8.decode(@host.read_metainfo(diagnostic_path)).contains(
+        "swarmcrate.diagnostics.v1",
+      ),
+    )
     let receipt = dir + "/" + mode + "-receipt.json"
     let with_receipt = execute([
       "verify",

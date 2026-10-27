@@ -43,7 +43,7 @@ fn main {
       if !report.ok || !report.scope.complete {
         abort("intact example failed verification")
       }
-      let corrupt = @swarm.verify_payload(
+      let (corrupt, damaged_receipt) = @swarm.verify_with_receipt(
         torrent,
         [Some(content.length().to_int64())],
         fn(_, _, size) { Bytes::make(size, 0) },
@@ -55,6 +55,7 @@ fn main {
       println(@swarm.torrent_magnet(torrent))
       println(@swarm.verification_json(report).stringify())
       println(@swarm.receipt_json_text(receipt))
+      println(@swarm.receipt_diagnostics_json_text(damaged_receipt))
     }
     println(
       "PASS: all three modes created, inspected and verified; corruption detected",

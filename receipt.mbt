@@ -3,6 +3,7 @@
 /// Constructed by verify_with_receipt, rather than by pairing an arbitrary report and subject.
 pub struct VerificationReceipt {
   priv text : String
+  priv diagnostics_text : String
 }
 
 ///|
@@ -22,6 +23,9 @@ pub fn verify_with_receipt(
   let sizes = lengths.copy()
   let report = verify_parsed(parsed, sizes, read, detail_limit, selected_files)
   let info = parsed.summary
+  let diagnostics = file_diagnostics_json(
+    info, report, metainfo_sha256, metainfo_bytes,
+  )
   let subject = j_object([
     ("metainfo_sha256", Json::string(metainfo_sha256)),
     ("metainfo_bytes", Json::string(metainfo_bytes)),
@@ -56,12 +60,13 @@ pub fn verify_with_receipt(
       "producer",
       j_object([
         ("name", Json::string("SwarmCrate")),
-        ("version", Json::string("0.8.0")),
+        ("version", Json::string("0.9.0")),
       ]),
     ),
     ("subject", subject),
     ("observations", Json::array(observations)),
     ("verification", verification_json(report)),
+    ("file_diagnostics", diagnostics),
     (
       "outcome",
       Json::string(
@@ -78,11 +83,24 @@ pub fn verify_with_receipt(
     ("publisher_authenticated", Json::boolean(false)),
   ])
   // Snapshot before returning the mutable report arrays to the consumer.
-  (report, VerificationReceipt::{ text: result.stringify(indent=2), })
+  (
+    report,
+    VerificationReceipt::{
+      text: result.stringify(indent=2),
+      diagnostics_text: diagnostics.stringify(indent=2),
+    },
+  )
 }
 
 ///|
 /// Serialize the immutable receipt snapshot. This does not reverify a saved JSON document.
 pub fn receipt_json_text(receipt : VerificationReceipt) -> String {
   receipt.text
+}
+
+///|
+/// Export immutable per-file candidate ranges bound to the same receipt and scope.
+/// Truncated failure details make the range inventory incomplete, never a complete repair plan.
+pub fn receipt_diagnostics_json_text(receipt : VerificationReceipt) -> String {
+  receipt.diagnostics_text
 }

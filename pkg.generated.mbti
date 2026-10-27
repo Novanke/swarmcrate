@@ -36,6 +36,8 @@ pub fn plan_json(TorrentPlan) -> Json
 
 pub fn plan_torrent(Array[SourceFile], CreateOptions) -> TorrentPlan raise CrateError
 
+pub fn receipt_diagnostics_json_text(VerificationReceipt) -> String
+
 pub fn receipt_json_text(VerificationReceipt) -> String
 
 pub fn recommend_piece_length(Array[SourceFile], mode? : TorrentMode, target_pieces? : Int32) -> Int32 raise CrateError

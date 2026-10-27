@@ -257,12 +257,31 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
   })
   let html = one(args, "--html", "")
   let receipt_path = one(args, "--receipt", "")
-  if args.values.contains("--receipt") && receipt_path == "" {
-    fail("--receipt requires a nonempty output path")
+  let diagnostics_path = one(args, "--diagnostics", "")
+  for
+    (key, path) in [
+      ("--receipt", receipt_path),
+      ("--diagnostics", diagnostics_path),
+    ] {
+    if args.values.contains(key) && path == "" {
+      fail(key + " requires a nonempty output path")
+    }
+  }
+  let detail_limit = @string.parse_int(one(args, "--detail-limit", "4096")) catch {
+    _ => {
+      fail("--detail-limit must be an integer in 1..10000")
+      0
+    }
+  }
+  if detail_limit < 1 || detail_limit > 10000 {
+    fail("--detail-limit must be an integer in 1..10000")
   }
   let outputs : Array[String] = []
   if receipt_path != "" {
     outputs.push(receipt_path)
+  }
+  if diagnostics_path != "" {
+    outputs.push(diagnostics_path)
   }
   if html != "" {
     outputs.push(html)
@@ -278,22 +297,43 @@ fn verify(args : Arguments) -> CommandResult raise @lib.CrateError {
   let read = fn(i : Int32, offset : Int64, n : Int32) raise @lib.CrateError {
     @host.read_range(paths[i], offset, n, stamp=stats[i].unwrap().stamp)
   }
-  let (report, receipt) = if receipt_path != "" {
+  let (report, receipt) = if receipt_path != "" || diagnostics_path != "" {
     let (report, receipt) = @lib.verify_with_receipt(
       torrent,
       sizes,
       read,
+      detail_limit~,
       selected_files=selected,
     )
     (report, Some(receipt))
   } else {
-    (@lib.verify_payload(torrent, sizes, read, selected_files=selected), None)
+    (
+      @lib.verify_payload(
+        torrent,
+        sizes,
+        read,
+        detail_limit~,
+        selected_files=selected,
+      ),
+      None,
+    )
   }
   for i in scope.required_files {
     @host.check_unchanged(paths[i], stats[i].unwrap())
   }
   if receipt is Some(receipt) {
-    @host.write_new(receipt_path, @utf8.encode(@lib.receipt_json_text(receipt)))
+    if receipt_path != "" {
+      @host.write_new(
+        receipt_path,
+        @utf8.encode(@lib.receipt_json_text(receipt)),
+      )
+    }
+    if diagnostics_path != "" {
+      @host.write_new(
+        diagnostics_path,
+        @utf8.encode(@lib.receipt_diagnostics_json_text(receipt)),
+      )
+    }
   }
   if html != "" {
     @host.write_new(html, @utf8.encode(@lib.verification_html(info, report)))
@@ -322,16 +362,17 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.8.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.9.0 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
-      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--html REPORT.html]\n" +
+      "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
       "Create defaults to auto piece sizing (aims for 4096 pieces, accounts for v2/hybrid file alignment). Use an explicit byte count for a fixed layout.\n" +
       "Plan reads filesystem metadata only: no payload hashes or output files. Piece-layer bytes are an upper bound, not total metainfo size.\n" +
       "--file selects exact inspected paths (use /). V1 shared boundary pieces can require neighbour files. Partial success is not a full-payload certificate.\n" +
       "--receipt saves unsigned JSON bound to the exact metainfo SHA-256, infohash, file mapping and checked scope; stdout stays swarmcrate.verify.v2.\n" +
+      "--diagnostics saves per-file merged candidate ranges for hash mismatch, unreadable pieces, missing/extra bytes. Truncated details mean an incomplete range inventory.\n" +
       "Outputs are new files; existing files are never overwritten. Exit: 0 success, 1 input/I/O error, 2 failed verification.\n" +
       "Core library: Wasm GC and JS. Filesystem CLI: Node.js >=22.16. No network operations.",
     }
@@ -352,7 +393,13 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
       }
     }
     "verify" =>
-      verify(parse_args(args, ["--html", "--file", "--receipt"], false))
+      verify(
+        parse_args(
+          args,
+          ["--html", "--file", "--receipt", "--diagnostics", "--detail-limit"],
+          false,
+        ),
+      )
     "inspect" | "magnet" => {
       let parsed = parse_args(args, [], false)
       arity(parsed, 1)
