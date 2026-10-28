@@ -1,10 +1,16 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Novanke/swarmcrate/cli"
 
+import {
+  "Novanke/swarmcrate",
+}
+
 // Values
 pub fn arguments() -> Array[String]
 
 pub fn execute(Array[String]) -> CommandResult
+
+pub fn execute_create_with_control(Array[String], (@swarmcrate.CreationProgress) -> Bool raise @swarmcrate.CrateError) -> CommandResult
 
 pub fn set_exit_code(Int32) -> Unit
 

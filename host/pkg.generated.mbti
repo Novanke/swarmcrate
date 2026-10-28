@@ -26,6 +26,8 @@ pub fn stat(String) -> FileStat raise @swarmcrate.CrateError
 
 pub fn write_new(String, Bytes) -> Unit raise @swarmcrate.CrateError
 
+pub fn write_new_atomic(String, Bytes) -> Unit raise @swarmcrate.CrateError
+
 // Errors
 
 // Types and methods

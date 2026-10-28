@@ -148,7 +148,7 @@ fn read_web_seeds(top : BNode) -> Array[String] raise CrateError {
 
 ///|
 fn top_fields(info : BNode, options : CreateOptions) -> Array[(String, BNode)] {
-  let fields = [("info", info), ("created by", bn_text("SwarmCrate 0.10.0"))]
+  let fields = [("info", info), ("created by", bn_text("SwarmCrate 0.11.0"))]
   if !options.trackers.is_empty() {
     fields.push(("announce", bn_text(options.trackers[0][0])))
     fields.push(
@@ -185,6 +185,7 @@ fn create_v1_torrent(
   files : Array[SourceFile],
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  control : CreateControl?,
 ) -> Bytes raise CrateError {
   let order = sorted_source_indices(files)
   let sorted = order.map(fn(i) { files[i] })
@@ -204,6 +205,7 @@ fn create_v1_torrent(
   if options.private_torrent {
     fields.push(("private", bn_int(1L)))
   }
+  emit_creation_progress(control, "before_encode")
   encode_bencode(bn_dict(top_fields(bn_dict(fields), options)))
 }
 
@@ -316,12 +318,55 @@ pub fn create_torrent(
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
-  ignore(plan_torrent(files, options))
+  create_torrent_impl(files, options, read, None, plan_torrent(files, options))
+}
+
+///|
+fn create_torrent_impl(
+  files : Array[SourceFile],
+  options : CreateOptions,
+  read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  on_progress : ((CreationProgress) -> Bool raise CrateError)?,
+  plan : TorrentPlan,
+) -> Bytes raise CrateError {
+  let control = on_progress.map(fn(callback) {
+    CreateControl::{ callback, plan, reads: 0, bytes: 0L, }
+  })
+  emit_creation_progress(control, "start")
+  let observed_read = match control {
+    None => read
+    Some(control) =>
+      fn(i, offset, n) raise CrateError {
+        emit_creation_progress(
+          Some(control),
+          "before_read",
+          file=Some(i),
+          offset=Some(offset),
+          length=Some(n),
+        )
+        control.reads += 1
+        let data = read_exact(read, i, offset, n)
+        control.bytes += n.to_int64()
+        emit_creation_progress(
+          Some(control),
+          "after_read",
+          file=Some(i),
+          offset=Some(offset),
+          length=Some(n),
+        )
+        data
+      }
+  }
   let data = match options.mode {
-    V1 => create_v1_torrent(files, options, read)
-    V2 => create_v2_torrent(files, options, read)
-    Hybrid => create_hybrid_torrent(files, options, read)
+    V1 => create_v1_torrent(files, options, observed_read, control)
+    V2 => create_v2_torrent(files, options, observed_read, control)
+    Hybrid => create_hybrid_torrent(files, options, observed_read, control)
   }
   ignore(inspect_torrent(data))
+  emit_creation_progress(
+    control,
+    "finalize",
+    metainfo_bytes=Some(data.length()),
+  )
   data
 }

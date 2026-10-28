@@ -13,6 +13,41 @@ extern "js" fn cli_cleanup(path : String) -> Unit =
   #| path => process.getBuiltinModule('node:fs').rmSync(path,{recursive:true,force:true})
 
 ///|
+test "controlled CLI creation can cancel before atomic publication and otherwise matches legacy" {
+  let dir = cli_fixture()
+  errdefer cli_cleanup(dir)
+  for mode in ["v1", "v2", "hybrid"] {
+    let output = dir + "/" + mode + "-controlled.torrent"
+    let args = ["create", dir + "/input", output, "--mode", mode]
+    let stopped = execute_create_with_control(args, fn(event) {
+      event.phase != "before_write"
+    })
+    assert_eq(stopped.code, 3)
+    assert_eq(@host.stat(output).kind, "missing")
+    let failed = execute_create_with_control(args, fn(
+      event,
+    ) raise @lib.CrateError {
+      if event.phase == "before_write" {
+        raise @lib.CrateError("observer", "observer failed")
+      }
+      true
+    })
+    assert_eq(failed.code, 1)
+    assert_eq(@host.stat(output).kind, "missing")
+    assert_eq(execute_create_with_control(args, fn(_) { true }).code, 0)
+    let legacy = dir + "/" + mode + "-legacy.torrent"
+    assert_eq(
+      execute(["create", dir + "/input", legacy, "--mode", mode]).code,
+      0,
+    )
+    assert_eq(@host.read_metainfo(output), @host.read_metainfo(legacy))
+    assert_eq(execute_create_with_control(args, fn(_) { true }).code, 1)
+  }
+  assert_eq(execute_create_with_control(["verify"], fn(_) { true }).code, 1)
+  cli_cleanup(dir)
+}
+
+///|
 test "CLI creates usable files edits endpoints verifies and uses meaningful exit codes" {
   let dir = cli_fixture()
   errdefer cli_cleanup(dir)

@@ -71,6 +71,7 @@ fn create_v2_torrent(
   files : Array[SourceFile],
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  control : CreateControl?,
 ) -> Bytes raise CrateError {
   let (tree, layers) = v2_components(files, options, read)
   let fields = [
@@ -84,6 +85,7 @@ fn create_v2_torrent(
   }
   let top = top_fields(bn_dict(fields), options)
   top.push(("piece layers", layers))
+  emit_creation_progress(control, "before_encode")
   encode_bencode(bn_dict(top))
 }
 

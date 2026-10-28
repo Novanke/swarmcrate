@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 — 2026-10-28
+
+- Add `create_torrent_with_control` and scalar `CreationProgress`, with separate read, pre-encoding and validated-finalization checkpoints. Cancel/observer/read failures return no metainfo, including after 100% of payload reads or after encoding. Preflight before freezing caller-owned path/endpoint arrays; preserve canonical bytes, original read indices and single-pass hybrid I/O.
+- Add JS `cli.execute_create_with_control` with cancellation code 3, a final `before_write` checkpoint and source-snapshot checks before and after that observer. Preserve ordinary `execute`, creation API/output and legacy write semantics.
+- Add opt-in `host.write_new_atomic`: exclusive same-parent staging, full write/fsync/close and non-replacing hard-link publication. Hard-link support is required; unsupported systems fail closed. Caught failures clean owned staging best-effort and never delete competing output. Abrupt termination may leave hidden staging, but the published target is absent or complete; no power-loss or atomic-source-snapshot guarantee.
+- Pass 43 core / 52 JS blocks, 215 interoperability, 30 verification-control and 78 creation-control disk scenarios. Test all cancellation/error phases, frozen input arrays, partial/zero writes, sync/link failure, source edits inside final observers, racing outputs, and process exit before/after publication. Both portable creation examples run on Wasm GC/JS; new real-file consumers use public APIs.
+
 ## 0.10.0 — 2026-10-28
 
 - Add opt-in `verify_with_control` and scalar `VerificationProgress` snapshots for synchronous cooperative verification: start, before/after real reads, each hash comparison and finalization. Preserve existing APIs, report/receipt schemas, selected scopes and one-pass hybrid reads.

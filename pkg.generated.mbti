@@ -12,6 +12,8 @@ pub fn create_options(String) -> CreateOptions
 
 pub fn create_torrent(Array[SourceFile], CreateOptions, (Int32, Int64, Int32) -> Bytes raise CrateError) -> Bytes raise CrateError
 
+pub fn create_torrent_with_control(Array[SourceFile], CreateOptions, (Int32, Int64, Int32) -> Bytes raise CrateError, (CreationProgress) -> Bool raise CrateError) -> Bytes raise CrateError
+
 pub fn edit_distribution(Bytes, Array[Array[String]], Array[String]) -> Bytes raise CrateError
 
 pub fn expected_v1_pieces(Bytes) -> Bytes raise CrateError
@@ -84,6 +86,19 @@ pub(all) struct CreateOptions {
   trackers : Array[Array[String]]
   web_seeds : Array[String]
   comment : String
+}
+
+pub(all) struct CreationProgress {
+  phase : String
+  mode : TorrentMode
+  file_count : Int32
+  total_bytes : Int64
+  read_calls : Int32
+  validated_read_bytes : Int64
+  file : Int32?
+  offset : Int64?
+  length : Int32?
+  metainfo_bytes : Int32?
 }
 
 pub(all) struct FileIssue {

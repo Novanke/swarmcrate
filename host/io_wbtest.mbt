@@ -13,6 +13,30 @@ extern "js" fn cleanup_fixture(path : String) -> Unit =
   #| path => process.getBuiltinModule('node:fs').rmSync(path,{recursive:true,force:true})
 
 ///|
+test "atomic publication preserves existing files and removes staging after normal completion" {
+  let dir = fixture()
+  errdefer cleanup_fixture(dir)
+  let path = dir + "/atomic.torrent"
+  write_new_atomic(path, b"complete bytes")
+  assert_eq(read_metainfo(path), b"complete bytes")
+  assert_true(
+    try {
+      write_new_atomic(path, b"replace")
+      false
+    } catch {
+      _ => true
+    },
+  )
+  assert_eq(read_metainfo(path), b"complete bytes")
+  write_new_atomic(dir + "/empty", b"")
+  assert_eq(stat(dir + "/empty").length, 0L)
+  assert_true(
+    !directory_names(dir, 100).any(fn(name) { name.has_prefix(".swarmcrate-") }),
+  )
+  cleanup_fixture(dir)
+}
+
+///|
 test "disk adapter scans reads bounded ranges and refuses to overwrite" {
   let directory = fixture()
   errdefer cleanup_fixture(directory)

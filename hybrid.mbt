@@ -3,6 +3,7 @@ fn create_hybrid_torrent(
   files : Array[SourceFile],
   options : CreateOptions,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  control : CreateControl?,
 ) -> Bytes raise CrateError {
   let order = sorted_source_indices(files)
   let v1_files : Array[BNode] = []
@@ -53,6 +54,7 @@ fn create_hybrid_torrent(
   }
   let top = top_fields(bn_dict(fields), options)
   top.push(("piece layers", layers))
+  emit_creation_progress(control, "before_encode")
   encode_bencode(bn_dict(top))
 }
 

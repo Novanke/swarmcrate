@@ -158,17 +158,57 @@ fn plan(args : Arguments) -> CommandResult raise @lib.CrateError {
 
 ///|
 fn create(args : Arguments) -> CommandResult raise @lib.CrateError {
+  create_impl(args, None)
+}
+
+///|
+fn create_impl(
+  args : Arguments,
+  on_progress : ((@lib.CreationProgress) -> Bool raise @lib.CrateError)?,
+) -> CommandResult raise @lib.CrateError {
   arity(args, 2)
   let input = prepare_input(args)
   let output = args.positionals[1]
-  let torrent = @lib.create_torrent(input.files, input.options, (i, offset, n) => {
+  if on_progress is Some(_) {
+    if @host.stat(output).kind != "missing" ||
+      @host.stat(@host.resolve(output) + "/..").kind != "directory" {
+      fail(
+        "controlled creation requires a new output and an existing parent directory",
+      )
+    }
+  }
+  let read = fn(i : Int32, offset : Int64, n : Int32) raise @lib.CrateError {
     @host.read_source(input.snapshot.sources, i, offset, n)
-  })
+  }
+  let mut final_progress : @lib.CreationProgress? = None
+  let torrent = match on_progress {
+    None => @lib.create_torrent(input.files, input.options, read)
+    Some(callback) =>
+      @lib.create_torrent_with_control(input.files, input.options, read, fn(
+        event,
+      ) raise @lib.CrateError {
+        final_progress = Some(event)
+        callback(event)
+      })
+  }
   // Recheck both file contents/identity tokens and the scanned directory roster.
   @host.check_scan_unchanged(input.snapshot)
   let info = @lib.inspect_torrent(torrent)
   let magnet = @lib.torrent_magnet(torrent)
-  @host.write_new(output, torrent)
+  match on_progress {
+    None => @host.write_new(output, torrent)
+    Some(callback) => {
+      let event = { ..final_progress.unwrap(), phase: "before_write", }
+      if !callback(event) {
+        raise @lib.CrateError(
+          "cancelled", "torrent creation cancelled before publication",
+        )
+      }
+      // The observer itself may have edited a source after the first recheck.
+      @host.check_scan_unchanged(input.snapshot)
+      @host.write_new_atomic(output, torrent)
+    }
+  }
   {
     code: 0,
     output: Json::object(
@@ -362,7 +402,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.10.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.11.0 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +
@@ -441,6 +481,40 @@ pub fn execute(args : Array[String]) -> CommandResult {
     @lib.CrateError(code, detail) =>
       {
         code: 1,
+        output: Json::object(
+          Map([("error", Json::string(code)), ("detail", Json::string(detail))]),
+        ).stringify(indent=2),
+      }
+  }
+}
+
+///|
+/// Controlled creation command. Cancellation exits 3, other errors 1; success matches create.
+/// args includes "create" and the normal creation arguments. Atomic publication needs hard links.
+pub fn execute_create_with_control(
+  args : Array[String],
+  on_progress : (@lib.CreationProgress) -> Bool raise @lib.CrateError,
+) -> CommandResult {
+  try {
+    if args.is_empty() || args[0] != "create" {
+      fail("expected create and its arguments")
+    }
+    let parsed = parse_args(
+      args,
+      [
+        "--mode", "--piece-length", "--name", "--tracker", "--web-seed", "--comment",
+      ],
+      true,
+    )
+    create_impl(parsed, Some(on_progress))
+  } catch {
+    @lib.CrateError(code, detail) =>
+      {
+        code: if code == "cancelled" {
+          3
+        } else {
+          1
+        },
         output: Json::object(
           Map([("error", Json::string(code)), ("detail", Json::string(detail))]),
         ).stringify(indent=2),

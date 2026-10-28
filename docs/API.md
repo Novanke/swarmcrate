@@ -54,6 +54,14 @@ From 0.4.0, standalone v1 multifile inputs also accept BEP 47 `attr="p"` padding
 
 This is a deliberate subset of BEP 47, not full extended-attribute support. Unknown attributes, attribute combinations, symlink targets and single-file attributes other than empty are rejected. In particular, single-file link attributes that older versions ignored now raise a metainfo error. Padding paths never become filesystem requests; real `.pad` source paths remain reserved.
 
+## Cooperative creation and staged publication
+
+From 0.11.0, `create_torrent_with_control(files, options, read, on_progress)` returns complete validated bytes, or raises without returning metainfo on cancellation/read/observer errors. Inputs are preflighted before copying mutable path/endpoint arrays. Original callback indices, canonical output and single-pass reads are preserved. Creation events distinguish start, before/after successful real reads, before encoding and finalization; byte progress is not metainfo completion.
+
+JS-only `cli.execute_create_with_control(args, callback)` adds a final `before_write` checkpoint and checks the scan both before and after that callback. It uses new `host.write_new_atomic`: exclusive temporary staging, fsync/close, non-replacing hard-link publication, then owned-stage cleanup. Hard-link support is required; unsupported filesystems fail closed. Ordinary CLI/host write interfaces are unchanged. Cancel returns command code 3; old command exit codes remain unchanged.
+
+No cancellable callback runs after publication begins. A process interrupted during staging leaves no published target; interruption after the link leaves complete bytes, though hidden staging data may remain. Source checks are sequential, not an atomic filesystem snapshot. See [creation checkpoints, portability and fault evidence](creation-control.md).
+
 ## Cooperative verification control
 
 `verify_with_control(data, sizes, read, on_progress, detail_limit=4096, selected_files=None)` is additive from 0.10.0 and returns the same report/receipt pair as `verify_with_receipt`. `on_progress(VerificationProgress) -> Bool raise CrateError` receives synchronous scalar snapshots at start, before/after each real read, after each hash comparison, and before finalization. False raises `cancelled`; observer errors retain their code/detail. Neither returns a report or receipt, including when all checks have already finished. Ordinary reader errors remain unreadable-piece failures, even if their code is `cancelled`.
