@@ -7,7 +7,7 @@ fn verify_hybrid(
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   state : VerifyState,
-) -> Unit {
+) -> Unit raise CrateError {
   let piece = parsed.summary.piece_length
   let buffer : FixedArray[Byte] = FixedArray::make(piece, 0)
   let mut storage = 0L
@@ -23,6 +23,7 @@ fn verify_hybrid(
     unreadable: 0,
     failures: [],
     limit: state.limit,
+    control: state.control,
   }
   let mut global_piece = 0
   for index, file in parsed.summary.files {
@@ -68,6 +69,7 @@ fn verify_hybrid(
       } else {
         None
       }
+      check_verification_control(state.control)
       let readable = actual is Some(_)
       let sha1_matches = if readable {
         let remaining = storage - global_piece.to_int64() * piece.to_int64()

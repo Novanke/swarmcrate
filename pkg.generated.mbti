@@ -64,6 +64,8 @@ pub fn verification_scope(Bytes, selected_files? : Array[Int32]?) -> Verificatio
 
 pub fn verify_payload(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> VerificationReport raise CrateError
 
+pub fn verify_with_control(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, (VerificationProgress) -> Bool raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> (VerificationReport, VerificationReceipt) raise CrateError
+
 pub fn verify_with_receipt(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> (VerificationReport, VerificationReceipt) raise CrateError
 
 // Errors
@@ -159,6 +161,23 @@ pub(all) struct TorrentPlan {
 pub(all) struct V2FileHash {
   root : Bytes
   piece_layer : Bytes
+}
+
+pub(all) struct VerificationProgress {
+  phase : String
+  total_checks : Int32
+  checked_pieces : Int32
+  failed_pieces : Int32
+  unreadable_pieces : Int32
+  read_calls : Int32
+  validated_read_bytes : Int64
+  complete_scope : Bool
+  selected_file_count : Int32
+  required_file_count : Int32
+  file : Int32?
+  offset : Int64?
+  length : Int32?
+  read_ok : Bool?
 }
 
 pub struct VerificationReceipt {

@@ -41,6 +41,8 @@ jobs:
           moon build --target js --release --deny-warn
           moon run examples/library --target wasm-gc --release --deny-warn
           moon run examples/library --target js --release --deny-warn
+          moon run examples/controlled --target wasm-gc --release --deny-warn
+          moon run examples/controlled --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
           node scripts/benchmark.mjs --runs 1
@@ -49,3 +51,4 @@ jobs:
         run: |
           python -m pip install libtorrent==2.1.1 torf==4.3.1
           python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
+          python scripts/control_interop.py

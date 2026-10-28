@@ -16,12 +16,55 @@ pub fn verify_with_receipt(
   detail_limit~ : Int32 = 4096,
   selected_files~ : Array[Int32]? = None,
 ) -> (VerificationReport, VerificationReceipt) raise CrateError {
+  verify_receipt_impl(
+    torrent,
+    lengths,
+    read,
+    None,
+    detail_limit,
+    selected_files,
+  )
+}
+
+///|
+/// Cooperatively verify with synchronous progress and cancellation checkpoints.
+/// False raises CrateError("cancelled", ...); observer errors propagate unchanged.
+/// Cancellation returns neither a report nor a receipt, including at finalization.
+pub fn verify_with_control(
+  torrent : Bytes,
+  lengths : Array[Int64?],
+  read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  on_progress : (VerificationProgress) -> Bool raise CrateError,
+  detail_limit~ : Int32 = 4096,
+  selected_files~ : Array[Int32]? = None,
+) -> (VerificationReport, VerificationReceipt) raise CrateError {
+  verify_receipt_impl(
+    torrent,
+    lengths,
+    read,
+    Some(on_progress),
+    detail_limit,
+    selected_files,
+  )
+}
+
+///|
+fn verify_receipt_impl(
+  torrent : Bytes,
+  lengths : Array[Int64?],
+  read : (Int32, Int64, Int32) -> Bytes raise CrateError,
+  on_progress : ((VerificationProgress) -> Bool raise CrateError)?,
+  detail_limit : Int32,
+  selected_files : Array[Int32]?,
+) -> (VerificationReport, VerificationReceipt) raise CrateError {
   let parsed = parse_torrent(torrent)
   // Capture raw identity and caller-owned sizes before invoking any read callback.
   let metainfo_sha256 = @crypto.bytes_to_hex_string(@crypto.sha256(torrent))
   let metainfo_bytes = torrent.length().to_string()
   let sizes = lengths.copy()
-  let report = verify_parsed(parsed, sizes, read, detail_limit, selected_files)
+  let report = verify_parsed(
+    parsed, sizes, read, detail_limit, selected_files, on_progress,
+  )
   let info = parsed.summary
   let diagnostics = file_diagnostics_json(
     info, report, metainfo_sha256, metainfo_bytes,
@@ -60,7 +103,7 @@ pub fn verify_with_receipt(
       "producer",
       j_object([
         ("name", Json::string("SwarmCrate")),
-        ("version", Json::string("0.9.0")),
+        ("version", Json::string("0.10.0")),
       ]),
     ),
     ("subject", subject),

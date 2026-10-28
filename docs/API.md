@@ -54,6 +54,14 @@ From 0.4.0, standalone v1 multifile inputs also accept BEP 47 `attr="p"` padding
 
 This is a deliberate subset of BEP 47, not full extended-attribute support. Unknown attributes, attribute combinations, symlink targets and single-file attributes other than empty are rejected. In particular, single-file link attributes that older versions ignored now raise a metainfo error. Padding paths never become filesystem requests; real `.pad` source paths remain reserved.
 
+## Cooperative verification control
+
+`verify_with_control(data, sizes, read, on_progress, detail_limit=4096, selected_files=None)` is additive from 0.10.0 and returns the same report/receipt pair as `verify_with_receipt`. `on_progress(VerificationProgress) -> Bool raise CrateError` receives synchronous scalar snapshots at start, before/after each real read, after each hash comparison, and before finalization. False raises `cancelled`; observer errors retain their code/detail. Neither returns a report or receipt, including when all checks have already finished. Ordinary reader errors remain unreadable-piece failures, even if their code is `cancelled`.
+
+Check totals describe the selected scope and count both hybrid schemes. Completed counts are not a passing result. Read counts represent callback attempts; validated byte counts include only exact successful chunks, not failed/partial reads or OS traffic. An empty-file selection may have zero checks but still fail its size/existence check. Source selection, hash layout and legacy JSON/exit codes are unchanged.
+
+Cancellation is cooperative, not preemptive or asynchronous; creation, browser event-loop/Worker integration and resume are not implemented here. Callers own storage stability and only save returned receipts after their own final source check. See [checkpoint fields, limits and executable consumers](sdk-control.md).
+
 ## Per-file candidate ranges
 
 From 0.9.0, `receipt_diagnostics_json_text(receipt)` exports immutable `swarmcrate.diagnostics.v1` JSON, also embedded as the additive `file_diagnostics` field in new `swarmcrate.receipt.v1` receipts. CLI `verify --diagnostics NEW.json` exports it independently of `--receipt`; HTML includes the grouped table. Outputs share preflight and post-read consistency checks; stdout and exit codes stay unchanged.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 — 2026-10-28
+
+- Add opt-in `verify_with_control` and scalar `VerificationProgress` snapshots for synchronous cooperative verification: start, before/after real reads, each hash comparison and finalization. Preserve existing APIs, report/receipt schemas, selected scopes and one-pass hybrid reads.
+- False from an observer raises `cancelled`; observer errors retain their code/detail and cannot disappear into piece-read recovery. Ordinary reader failures, including errors named `cancelled`, remain unreadable-piece failures. Cancellation returns neither report nor receipt, even after every check has completed.
+- Count only selected hash checks, both hybrid schemes, read callback attempts and validated complete-read bytes. Document zero-check empty selections, completed-but-failed checks, cancellation latency and host responsibilities. This is not asynchronous I/O, creation control, browser event-loop integration or resume.
+- Add portable and Node filesystem consumers. The latter rechecks the source and writes only after successful API return, with dedicated cancellation exit code 3. Windows/Linux CI executes both portable backends and real output/no-output cases.
+- Pass 39 core / 46 JS test blocks, the existing 215 independent interoperability scenarios and 30 controlled-SDK disk scenarios. Cover every cancellation/error checkpoint, failed-read observer errors, monotonic counters, ordinary reader error isolation, empty/missing inputs, no duplicate reads, finalization cancellation, existing outputs and post-read source changes.
+
 ## 0.9.0 — 2026-10-28
 
 - Group recorded failures by real file, union adjacent/overlapping physical intervals, and deduplicate hybrid SHA-1/SHA-256 ranges. Separate candidate hash-mismatch/unreadable-piece ranges, missing content, extra tails and the union of expected-content attention ranges. Preserve missing-empty-file issues without inventing bytes or locating an exact failing read from a shared v1 piece.

@@ -36,6 +36,7 @@ priv struct VerifyState {
   mut unreadable : Int32
   failures : Array[PieceFailure]
   limit : Int32
+  control : VerifyControl?
 }
 
 ///|
@@ -46,7 +47,7 @@ fn record_piece(
   spans : Array[PieceSpan],
   matches : Bool,
   readable : Bool,
-) -> Unit {
+) -> Unit raise CrateError {
   state.checked += 1
   if !matches || !readable {
     state.failed += 1
@@ -66,6 +67,16 @@ fn record_piece(
       })
     }
   }
+  if state.control is Some(control) {
+    control.checked += 1
+    if !matches || !readable {
+      control.failed += 1
+    }
+    if !readable {
+      control.unreadable += 1
+    }
+    emit_verification_progress(Some(control), "check")
+  }
 }
 
 ///|
@@ -75,7 +86,7 @@ fn verify_v1(
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   state : VerifyState,
-) -> Unit {
+) -> Unit raise CrateError {
   let piece_length = parsed.summary.piece_length
   let buffer : FixedArray[Byte] = FixedArray::make(piece_length, 0)
   let spans : Array[PieceSpan] = []
@@ -106,6 +117,7 @@ fn verify_v1(
             }
           }
         }
+        check_verification_control(state.control)
         if !valid_size {
           readable = false
         }
@@ -163,7 +175,7 @@ fn verify_v2(
   lengths : Array[Int64?],
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   state : VerifyState,
-) -> Unit {
+) -> Unit raise CrateError {
   let piece = parsed.summary.piece_length
   for index, file in parsed.summary.files {
     if file.length == 0L {
@@ -190,6 +202,7 @@ fn verify_v2(
       } else {
         None
       }
+      check_verification_control(state.control)
       let matches = match actual {
         None => false
         Some(actual) =>
@@ -223,7 +236,7 @@ pub fn verify_payload(
   selected_files~ : Array[Int32]? = None,
 ) -> VerificationReport raise CrateError {
   let parsed = parse_torrent(torrent)
-  verify_parsed(parsed, lengths, read, detail_limit, selected_files)
+  verify_parsed(parsed, lengths, read, detail_limit, selected_files, None)
 }
 
 ///|
@@ -233,6 +246,7 @@ fn verify_parsed(
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
   detail_limit : Int32,
   selected_files : Array[Int32]?,
+  on_progress : ((VerificationProgress) -> Bool raise CrateError)?,
 ) -> VerificationReport raise CrateError {
   let plan = plan_verification(parsed, selected_files)
   if lengths.length() != parsed.summary.files.length() ||
@@ -257,6 +271,15 @@ fn verify_parsed(
       })
     }
   }
+  let control = on_progress.map(fn(callback) {
+    new_verify_control(parsed, plan, callback)
+  })
+  let observed_read = match control {
+    None => read
+    Some(control) =>
+      fn(i, o, n) raise CrateError { controlled_read(control, read, i, o, n) }
+  }
+  emit_verification_progress(control, "start")
   let state : VerifyState = {
     checked: 0,
     skipped: 0,
@@ -264,12 +287,15 @@ fn verify_parsed(
     unreadable: 0,
     failures: [],
     limit: detail_limit,
+    control,
   }
   match parsed.summary.mode {
-    V1 => verify_v1(parsed, plan.v1_pieces, lengths, read, state)
-    V2 => verify_v2(parsed, plan.selected, lengths, read, state)
-    Hybrid => verify_hybrid(parsed, plan.selected, lengths, read, state)
+    V1 => verify_v1(parsed, plan.v1_pieces, lengths, observed_read, state)
+    V2 => verify_v2(parsed, plan.selected, lengths, observed_read, state)
+    Hybrid =>
+      verify_hybrid(parsed, plan.selected, lengths, observed_read, state)
   }
+  emit_verification_progress(control, "finalize")
   {
     ok: state.failed == 0 && issues.is_empty(),
     scope: plan.scope,

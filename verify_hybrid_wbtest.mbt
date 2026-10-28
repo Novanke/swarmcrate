@@ -125,6 +125,7 @@ test "one-pass hybrid diagnostics agree with independent v1 and v2 verification 
           unreadable: 0,
           failures: [],
           limit,
+          control: None,
         }
         verify_v1(parsed, plan.v1_pieces, sizes, read, separate)
         verify_v2(parsed, plan.selected, sizes, read, separate)
