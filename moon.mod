@@ -11,7 +11,7 @@
 
 name = "Novanke/swarmcrate"
 
-version = "0.11.1"
+version = "0.12.0"
 
 readme = "README.md"
 

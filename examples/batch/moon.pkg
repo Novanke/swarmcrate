@@ -1,0 +1,10 @@
+import {
+  "Novanke/swarmcrate" @swarm,
+  "moonbitlang/core/json",
+}
+
+options(
+  supported_targets: "wasm-gc+js",
+)
+
+pkgtype(kind: "executable")

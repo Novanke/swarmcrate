@@ -47,6 +47,9 @@ jobs:
           moon run examples/controlled --target js --release --deny-warn
           moon run examples/create_controlled --target wasm-gc --release --deny-warn
           moon run examples/create_controlled --target js --release --deny-warn
+          moon run examples/batch --target wasm-gc --release --deny-warn
+          moon run examples/batch --target js --release --deny-warn
+          moon run examples/batch_disk --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
           node scripts/benchmark.mjs --runs 1

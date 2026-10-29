@@ -6,6 +6,14 @@ import {
 }
 
 // Values
+pub fn audit_batch(BatchManifest, (Int32, BatchTask) -> Bytes raise CrateError, (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError, (Int32, Int32, Int64, Int32) -> Bytes raise CrateError, finish? : ((Int32) -> Unit raise CrateError)?, detail_limit? : Int32, max_summary_bytes? : Int32) -> BatchAudit raise CrateError
+
+pub fn batch_audit_exit_code(BatchAudit) -> Int32
+
+pub fn batch_audit_json_text(BatchAudit) -> String
+
+pub fn batch_manifest_tasks(BatchManifest) -> Array[BatchTask]
+
 pub fn check_bencode(Bytes) -> Unit raise CrateError
 
 pub fn create_options(String) -> CreateOptions
@@ -29,6 +37,8 @@ pub fn info_json(TorrentInfo) -> Json
 pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
 
 pub fn mode_name(TorrentMode) -> String
+
+pub fn parse_batch_manifest(Bytes) -> BatchManifest raise CrateError
 
 pub fn parse_magnet(String) -> Magnet raise CrateError
 
@@ -77,6 +87,21 @@ pub(all) suberror CrateError {
 pub fn CrateError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct BatchAudit {
+  // private fields
+}
+
+pub struct BatchManifest {
+  // private fields
+}
+
+pub(all) struct BatchTask {
+  id : String
+  metainfo : String
+  payload : String
+  files : Array[String]?
+}
+
 pub(all) struct CreateOptions {
   name : String
   mode : TorrentMode

@@ -5,6 +5,10 @@ import {
   "moonbitlang/core/encoding/utf8",
 }
 
+import {
+  "moonbitlang/core/json",
+} for "wbtest"
+
 options(
   supported_targets: "js",
 )

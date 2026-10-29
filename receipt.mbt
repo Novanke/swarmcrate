@@ -103,7 +103,7 @@ fn verify_receipt_impl(
       "producer",
       j_object([
         ("name", Json::string("SwarmCrate")),
-        ("version", Json::string("0.11.1")),
+        ("version", Json::string("0.12.0")),
       ]),
     ),
     ("subject", subject),

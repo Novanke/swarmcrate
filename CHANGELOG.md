@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 — 2026-10-29
+
+- Add a pure MoonBit strict batch-manifest parser, sequential storage-adapter SDK and immutable compact audit summary. Bind exact manifest/metainfo SHA-256, infohashes, requested/resolved scopes and same-run receipt digests; never deduplicate checks by infohash.
+- Isolate checked task errors while preserving PASS, PARTIAL_PASS and integrity FAIL. Copy exported tasks/callback mappings, discard results on completion-check failure, bound summary serialization and continue after a task quota error.
+- Add MoonBit CLI `audit-batch MANIFEST.json SUMMARY.json`: manifest-relative inputs, conservative protection of every declared root, per-task metainfo/payload checks, final manifest recheck, and staged atomic non-replacing summary publication. Reject ambiguous Windows drive-relative paths; hard-link support is required for publication.
+- Add five portable core and six real-file CLI test blocks, a dual-backend SDK example and an executable disk example. Preserve single-task APIs and independent Python oracles. Document sequential-time, unsigned-record and memory limitations honestly.
+
 ## 0.11.1 — 2026-10-29
 
 - Reject more than 400,000 SHA-1 pieces in the public hashing helper before allocating the piece buffer or invoking storage. Test the exact accepted boundary without creating a giant payload.

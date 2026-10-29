@@ -216,6 +216,16 @@ pub fn resolve(path : String) -> String raise @lib.CrateError {
 }
 
 ///|
+extern "js" fn os_resolve_from(directory : String, input : String) -> String =
+  #| (directory,input) => process.getBuiltinModule('node:path').resolve(directory,input)
+
+///|
+/// Resolve absolute or relative input using an explicit base, without filesystem reads.
+pub fn resolve_from(directory : String, input : String) -> String {
+  os_resolve_from(directory, input)
+}
+
+///|
 pub fn read_range(
   path : String,
   offset : Int64,
