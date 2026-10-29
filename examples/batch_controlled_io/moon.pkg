@@ -1,0 +1,11 @@
+import {
+  "Novanke/swarmcrate" @swarm,
+  "Novanke/swarmcrate/cli",
+  "Novanke/swarmcrate/host",
+}
+
+options(
+  supported_targets: "js",
+)
+
+pkgtype(kind: "executable")

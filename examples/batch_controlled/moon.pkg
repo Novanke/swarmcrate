@@ -1,0 +1,9 @@
+import {
+  "Novanke/swarmcrate" @swarm,
+}
+
+options(
+  supported_targets: "wasm-gc+js",
+)
+
+pkgtype(kind: "executable")

@@ -168,7 +168,7 @@ fn create_impl(
 ) -> CommandResult raise @lib.CrateError {
   arity(args, 2)
   let input = prepare_input(args)
-  let output = args.positionals[1]
+  let output = @host.resolve(args.positionals[1])
   if on_progress is Some(_) {
     if @host.stat(output).kind != "missing" ||
       @host.stat(@host.resolve(output) + "/..").kind != "directory" {
@@ -402,7 +402,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.12.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.13.0 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +

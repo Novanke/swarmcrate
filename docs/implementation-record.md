@@ -39,13 +39,13 @@ The later interoperability, CI and documentation commits are additional evidence
 
 ## Source measurement
 
-`python scripts/source_audit.py` currently reports 20 root implementation files, 3,693 nonblank/non-comment code lines, and 2,282 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
+`python scripts/source_audit.py` currently reports 21 root implementation files, 3,989 nonblank/non-comment code lines, and 2,461 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
 
 ## Executed verification
 
 - Toolchain: MoonBit stable 2026-10-16, moon `0.1.20261016`, moonc `v0.10.16+b1a0e846e`.
-- Wasm GC: 49 core test blocks passed with warnings denied.
-- JS: 64 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
+- Wasm GC: 53 core test blocks passed with warnings denied.
+- JS: 73 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
 - Independent real-file script: 215 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
 - The script checks output acceptance and hashes, reads and verifies libtorrent-generated v1/v2/hybrid torrents, exercises Unicode/nested/empty files, piece/block boundaries, corruption, truncation, missing payload, HTML output, no overwrite and endpoint edits.
 - No network session, tracker connection, download or seeding is used in these checks.
@@ -73,3 +73,5 @@ Reproduce with the commands in the README and inspect CI logs for the exact publ
 0.11.1 repairs three independently reproduced defects: public SHA-1 oversize preflight, structured handling of read/write/atomic-stage close failures without descriptor retry, and Windows Node 22.16.0 path/handle device-field disagreement. The minimum runtime executes the full existing disk chain, including source-change interception, plus 21 close-fault scenarios; CI covers Windows/Linux and Node 22.16.0/24. Public signatures and schemas are unchanged. This is reliability work for existing offline creation/verification rather than a new downloader, repair engine or security-certification claim.
 
 0.12.0 adds a portable MoonBit batch manifest/parser/runner and a MoonBit filesystem command. Task-local load/parse/selection/consistency errors do not stop later tasks; integrity FAIL and partial success remain distinct. Compact immutable summaries bind raw manifest/metainfo identities, exact scope and same-run receipt digests. Bounded serialization, protected inputs, final source/manifest checks and atomic non-replacing publication complete the offline chain. Five core and six CLI blocks plus portable/real-file examples provide evidence; no Python verification was removed and no Linguist classification was changed to increase the displayed language share.
+
+0.13.0 adds synchronous global batch checkpoints, true aggregate I/O deltas, provenance-based observer aborts across task/read-recovery catches, and a final controlled publication gate. Cancellation never returns a BatchAudit, including after every accepted row and serialized summary. Four portable and four CLI blocks plus 48 real child-process scenarios cover cancellation, source mutation, atomic faults and abrupt exits. Single-task/legacy batch APIs remain compatible; forceful termination and cooperative cancellation are explicitly distinguished.

@@ -365,6 +365,29 @@ pub fn audit_batch(
   detail_limit~ : Int32 = 128,
   max_summary_bytes~ : Int32 = 16777216,
 ) -> BatchAudit raise CrateError {
+  audit_batch_impl(
+    manifest,
+    load,
+    observe,
+    read,
+    finish,
+    detail_limit,
+    max_summary_bytes,
+    None,
+  )
+}
+
+///|
+fn audit_batch_impl(
+  manifest : BatchManifest,
+  load : (Int32, BatchTask) -> Bytes raise CrateError,
+  observe : (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError,
+  read : (Int32, Int32, Int64, Int32) -> Bytes raise CrateError,
+  finish : ((Int32) -> Unit raise CrateError)?,
+  detail_limit : Int32,
+  max_summary_bytes : Int32,
+  on_progress : ((BatchProgress) -> Bool raise CrateError)?,
+) -> BatchAudit raise CrateError {
   let tasks = manifest.tasks
   // Reserve 4 KiB for every possible compact error row and 4 KiB for the envelope.
   if detail_limit < 1 ||
@@ -373,6 +396,24 @@ pub fn audit_batch(
     max_summary_bytes > 16777216 {
     reject("limit", "invalid batch detail or summary budget")
   }
+  let control = on_progress.map(fn(callback) {
+    BatchControl::{
+      callback,
+      digest: manifest.digest,
+      task_count: tasks.length(),
+      completed: 0,
+      passed: 0,
+      partial: 0,
+      failed: 0,
+      errors: 0,
+      reads: 0L,
+      bytes: 0L,
+      task_reads: 0,
+      task_bytes: 0L,
+      error: None,
+    }
+  })
+  emit_batch_progress(control, "start")
   let rows : Array[Json] = []
   let mut used = 4096
   let mut passed = 0
@@ -381,25 +422,74 @@ pub fn audit_batch(
   let mut errors = 0
   let mut complete = true
   for index, task in tasks {
+    if control is Some(control) {
+      control.task_reads = 0
+      control.task_bytes = 0L
+    }
+    emit_batch_progress(
+      control,
+      "before_task",
+      task_index=Some(index),
+      task_id=Some(task.id),
+    )
     let mut subject = Json::null()
     let (initial_row, initial_outcome, initial_full_scope) = try {
       let torrent = load(index, copy_batch_task(task))
       if torrent.length() > 16777216 {
         reject("limit", "metainfo exceeds 16 MiB")
       }
+      emit_batch_progress(
+        control,
+        "after_load",
+        task_index=Some(index),
+        task_id=Some(task.id),
+      )
       let digest = @crypto.bytes_to_hex_string(@crypto.sha256(torrent))
       subject = batch_subject(torrent.length(), digest, None)
       let info = inspect_torrent(torrent)
       subject = batch_subject(torrent.length(), digest, Some(info))
       let selected = batch_selection(task, info)
       let scope = verification_scope(torrent, selected_files=selected)
+      emit_batch_progress(
+        control,
+        "before_observe",
+        task_index=Some(index),
+        task_id=Some(task.id),
+      )
       let sizes = observe(index, batch_info_copy(info), batch_scope_copy(scope))
-      let (report, receipt) = verify_with_receipt(
-        torrent,
-        sizes,
-        fn(file, offset, n) raise CrateError { read(index, file, offset, n) },
-        detail_limit~,
-        selected_files=selected,
+      let payload_read = fn(
+        file : Int32,
+        offset : Int64,
+        n : Int32,
+      ) raise CrateError {
+        read(index, file, offset, n)
+      }
+      let (report, receipt) = match control {
+        None =>
+          verify_with_receipt(
+            torrent,
+            sizes,
+            payload_read,
+            detail_limit~,
+            selected_files=selected,
+          )
+        Some(control) =>
+          verify_with_control(
+            torrent,
+            sizes,
+            payload_read,
+            fn(event) raise CrateError {
+              batch_verification_progress(control, index, task.id, event)
+            },
+            detail_limit~,
+            selected_files=selected,
+          )
+      }
+      emit_batch_progress(
+        control,
+        "before_finish",
+        task_index=Some(index),
+        task_id=Some(task.id),
       )
       if finish is Some(check) {
         check(index)
@@ -416,9 +506,13 @@ pub fn audit_batch(
         report.scope.complete,
       )
     } catch {
-      CrateError(code, detail) =>
+      CrateError(code, detail) => {
+        // A progress abort is global; ordinary task errors, even named cancelled, are local.
+        check_batch_control(control)
         (batch_error_row(index, task.id, subject, code, detail), "ERROR", false)
+      }
     }
+    check_batch_control(control)
     let mut row = initial_row
     let mut outcome = initial_outcome
     let mut full_scope = initial_full_scope
@@ -445,7 +539,22 @@ pub fn audit_batch(
       "FAIL" => failed += 1
       _ => errors += 1
     }
+    if control is Some(control) {
+      control.completed = rows.length()
+      control.passed = passed
+      control.partial = partial
+      control.failed = failed
+      control.errors = errors
+    }
+    emit_batch_progress(
+      control,
+      "task_complete",
+      task_index=Some(index),
+      task_id=Some(task.id),
+      task_outcome=Some(outcome),
+    )
   }
+  emit_batch_progress(control, "before_summary")
   let outcome = if errors > 0 {
     "ERROR"
   } else if failed > 0 {
@@ -461,7 +570,7 @@ pub fn audit_batch(
       "producer",
       j_object([
         ("name", Json::string("SwarmCrate")),
-        ("version", Json::string("0.12.0")),
+        ("version", Json::string("0.13.0")),
       ]),
     ),
     ("manifest_sha256", Json::string(manifest.digest)),
@@ -486,6 +595,7 @@ pub fn audit_batch(
   if @utf8.encode(text).length() > max_summary_bytes {
     reject("limit", "batch envelope exceeds summary budget")
   }
+  emit_batch_progress(control, "finalize")
   { text, exit_code: if errors > 0 { 1 } else if failed > 0 { 2 } else { 0 }, }
 }
 

@@ -50,6 +50,8 @@ jobs:
           moon run examples/batch --target wasm-gc --release --deny-warn
           moon run examples/batch --target js --release --deny-warn
           moon run examples/batch_disk --target js --release --deny-warn
+          moon run examples/batch_controlled --target wasm-gc --release --deny-warn
+          moon run examples/batch_controlled --target js --release --deny-warn
           node scripts/swarmcrate.mjs help
           node scripts/demo.mjs
           node scripts/benchmark.mjs --runs 1
@@ -61,3 +63,4 @@ jobs:
           python scripts/control_interop.py
           python scripts/creation_interop.py
           python scripts/io_faults.py
+          python scripts/batch_control_interop.py

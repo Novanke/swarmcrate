@@ -8,11 +8,15 @@ import {
 // Values
 pub fn audit_batch(BatchManifest, (Int32, BatchTask) -> Bytes raise CrateError, (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError, (Int32, Int32, Int64, Int32) -> Bytes raise CrateError, finish? : ((Int32) -> Unit raise CrateError)?, detail_limit? : Int32, max_summary_bytes? : Int32) -> BatchAudit raise CrateError
 
+pub fn audit_batch_with_control(BatchManifest, (Int32, BatchTask) -> Bytes raise CrateError, (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError, (Int32, Int32, Int64, Int32) -> Bytes raise CrateError, (BatchProgress) -> Bool raise CrateError, finish? : ((Int32) -> Unit raise CrateError)?, detail_limit? : Int32, max_summary_bytes? : Int32) -> BatchAudit raise CrateError
+
 pub fn batch_audit_exit_code(BatchAudit) -> Int32
 
 pub fn batch_audit_json_text(BatchAudit) -> String
 
 pub fn batch_manifest_tasks(BatchManifest) -> Array[BatchTask]
+
+pub fn batch_progress_json(BatchProgress) -> Json
 
 pub fn check_bencode(Bytes) -> Unit raise CrateError
 
@@ -93,6 +97,23 @@ pub struct BatchAudit {
 
 pub struct BatchManifest {
   // private fields
+}
+
+pub(all) struct BatchProgress {
+  phase : String
+  manifest_sha256 : String
+  task_count : Int32
+  completed_tasks : Int32
+  pass_tasks : Int32
+  partial_pass_tasks : Int32
+  failed_tasks : Int32
+  error_tasks : Int32
+  read_calls : Int64
+  validated_read_bytes : Int64
+  task_index : Int32?
+  task_id : String?
+  task_outcome : String?
+  verification : VerificationProgress?
 }
 
 pub(all) struct BatchTask {

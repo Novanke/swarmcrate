@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 — 2026-10-29
+
+- Add opt-in MoonBit `audit_batch_with_control`, immutable batch/verification snapshots and structured progress JSON. Count accepted rows separately from success, and aggregate real I/O deltas without an invented total-byte denominator.
+- Preserve task-local storage error isolation while globally propagating observer cancellation/errors through both task catches and verification read recovery. Cancellation returns no BatchAudit, including after all rows or final serialization.
+- Add JS `execute_batch_with_control`, final before_write cancellation, post-observer current-source/manifest checks and staged atomic summary publication. No callbacks after publication begins; preserve legacy API/schema/exit behavior.
+- Freeze preflighted batch and creation output paths before observers run; changing the working directory cannot redirect publication into a different or protected root. Include regressions for both consumers.
+- Provide a real file-consumer cancellation marker adapter: another process can create the marker, polled synchronously at checkpoints, to abort without publishing a summary.
+- Add four core/four CLI control test blocks, dual-backend and filesystem consumers, and 48 child-process scenarios for cancelled outputs, observer failures, mutations, stage faults, competing writers and process exits before/after commit.
+
 ## 0.12.0 — 2026-10-29
 
 - Add a pure MoonBit strict batch-manifest parser, sequential storage-adapter SDK and immutable compact audit summary. Bind exact manifest/metainfo SHA-256, infohashes, requested/resolved scopes and same-run receipt digests; never deduplicate checks by infohash.
