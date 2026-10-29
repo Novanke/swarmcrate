@@ -38,11 +38,15 @@ if(process.env.SWARM_STAGE_FAULT==='linked'){fs.writeSync=write;fs.linkSync=func
 
         def interrupted(label, mode='write'):
             target = root / (label + '.torrent')
+            previous = {p.name for p in root.glob('.swarmcrate-*')}
             result = subprocess.run([node, '--import', preloader.as_uri(), str(example), 'full', 'create', str(payload), str(target)],
                                     capture_output=True, text=True, encoding='utf-8', env=dict(os.environ, SWARM_STAGE_FAULT=mode))
             assert result.returncode == (92 if mode == 'linked' else 91), (result.returncode, result.stdout, result.stderr)
-            stage = next(p for p in root.glob('.swarmcrate-*') if p.is_dir() and json.loads((p / 'owner.json').read_text())['target_path'] == str(target))
+            created = [p for p in root.glob('.swarmcrate-*') if p.name not in previous]
+            assert len(created) == 1, created
+            stage = created[0]
             owner = json.loads((stage / 'owner.json').read_text())
+            assert owner['target_path'] == str(target)
             receipt = Path(tempfile.gettempdir()).resolve() / ('.swarmcrate-owner-' + owner['operation_id'] + '.json')
             assert receipt.read_bytes() == (stage / 'owner.json').read_bytes()
             assert row_for(stage)['status'] == 'orphan', row_for(stage)
