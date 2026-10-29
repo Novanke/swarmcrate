@@ -13,6 +13,8 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 长期按三条主线推进：**开源发布与数据集交付、离线镜像巡检、MoonBit 可复用 SDK**。优先级、下一项交付与验收标准见 [开发路线图](docs/ROADMAP.md)。
 
+受控创建和批量巡检强制终止后，可用 `staging-list PARENT` 只读识别残留，再用 `staging-clean STAGE --operation ID` 清理一个经确认的本机孤立任务。MoonBit 会核对所有权记录、目录/文件身份、检查快照和进程状态；旧版无记录、活动任务、额外文件或无法确认的条目保留，正式输出不受影响。使用范围、命令和失败边界见[暂存识别与安全清理](docs/staging-cleanup.md)。
+
 ## 快速使用
 
 安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，要求 **moonc ≥ 0.10.14**，本版验证使用 **0.10.16**；另安装 Node.js 22.16+。CI 会检查编译器版本下限。克隆后执行：
@@ -77,14 +79,14 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --diagnostics ./f
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.13.0
+node scripts/demo.mjs --output ./artifacts/demo-0.14.0
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告及凭据，以及指定文件的局部校验报告与凭据；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
 
 ## 批量巡检多个镜像或发布包
 
-0.13.0 提供纯 MoonBit 批量 SDK 与磁盘命令。`jobs.json` 使用 `swarmcrate.audit-manifest.v1`，例如：
+0.14.0 提供纯 MoonBit 批量 SDK 与磁盘命令。`jobs.json` 使用 `swarmcrate.audit-manifest.v1`，例如：
 
 ```json
 {"schema":"swarmcrate.audit-manifest.v1","tasks":[
@@ -117,7 +119,7 @@ python scripts/batch_control_interop.py
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.13.0
+moon add Novanke/swarmcrate@0.14.0
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -204,7 +206,7 @@ python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 python scripts/io_faults.py
 ```
 
-当前有 **53 个核心测试块**，JS 加文件系统/CLI 测试共 **73 个测试块**。独立互操作脚本通过 **215 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
+当前有 **55 个核心测试块**，JS 加文件系统/CLI 测试共 **78 个测试块**。独立互操作脚本通过 **215 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
 
 文件级诊断测试还覆盖字节位图区间并集对照、大偏移字符串、混合格式去重、缺失/短/长/空文件、邻居归属和不完整清单。新增 32 个磁盘场景对照实际文件、独立 v1 补零和三类输出保护；真实异常/短读观测同时导出诊断，确认不会重复读取载荷。
 
@@ -218,7 +220,7 @@ python scripts/io_faults.py
 
 批量控制另有四个核心和四个 MoonBit CLI 测试块，以及 **48 个真实子进程场景**：覆盖每个取消/异常检查点、读取恢复、最终计数、观察者修改来源、写入/同步/关闭/链接故障、竞争及强制退出。所有场景与测试块分别统计。
 
-仅根目录自写库代码：**3,989 行非空非注释源码，2,461 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+仅根目录自写库代码：**4,179 行非空非注释源码，2,572 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
 混合核验的 8 MiB + 3 字节合成对照中，相比注册表 0.4.0，读取量从 16,777,222 降至 8,388,611 字节，回调次数由 66 降至 33，两套哈希检查仍共 66 次。该结果说明读取量减少，不等于 CPU 哈希工作减半；性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 

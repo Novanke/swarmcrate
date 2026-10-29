@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn assess_staging(Bytes, Bytes?, StagingEvidence) -> StagingAssessment
+
 pub fn audit_batch(BatchManifest, (Int32, BatchTask) -> Bytes raise CrateError, (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError, (Int32, Int32, Int64, Int32) -> Bytes raise CrateError, finish? : ((Int32) -> Unit raise CrateError)?, detail_limit? : Int32, max_summary_bytes? : Int32) -> BatchAudit raise CrateError
 
 pub fn audit_batch_with_control(BatchManifest, (Int32, BatchTask) -> Bytes raise CrateError, (Int32, TorrentInfo, VerificationScope) -> Array[Int64?] raise CrateError, (Int32, Int32, Int64, Int32) -> Bytes raise CrateError, (BatchProgress) -> Bool raise CrateError, finish? : ((Int32) -> Unit raise CrateError)?, detail_limit? : Int32, max_summary_bytes? : Int32) -> BatchAudit raise CrateError
@@ -46,6 +48,8 @@ pub fn parse_batch_manifest(Bytes) -> BatchManifest raise CrateError
 
 pub fn parse_magnet(String) -> Magnet raise CrateError
 
+pub fn parse_staging_owner(Bytes) -> StagingOwner raise CrateError
+
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
 
 pub fn plan_json(TorrentPlan) -> Json
@@ -62,9 +66,13 @@ pub fn sha1_pieces(Array[SourceFile], Int32, (Int32, Int64, Int32) -> Bytes rais
 
 pub fn sorted_source_indices(Array[SourceFile]) -> Array[Int32] raise CrateError
 
+pub fn staging_owner_bytes(StagingOwner) -> Bytes raise CrateError
+
 pub fn torrent_magnet(Bytes) -> String raise CrateError
 
 pub fn torrent_storage_bytes(Bytes) -> Int64 raise CrateError
+
+pub fn valid_staging_operation_id(String) -> Bool
 
 pub fn validate_options(Array[SourceFile], CreateOptions) -> Unit raise CrateError
 
@@ -178,6 +186,34 @@ pub(all) struct PieceSpan {
 pub(all) struct SourceFile {
   path : Array[String]
   length : Int64
+}
+
+pub(all) struct StagingAssessment {
+  status : String
+  reason : String
+  operation_id : String?
+}
+
+pub(all) struct StagingEvidence {
+  stage_path : String
+  directory_id : String
+  data_id : String
+  actual_bytes : Int64
+  local_host : String
+  local_user : String
+  owner_state : String
+}
+
+pub(all) struct StagingOwner {
+  operation_id : String
+  stage_path : String
+  target_path : String
+  directory_id : String
+  data_id : String
+  pid : Int32
+  host : String
+  user : String
+  expected_bytes : Int64
 }
 
 pub(all) struct TorrentInfo {

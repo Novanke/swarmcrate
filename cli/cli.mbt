@@ -395,19 +395,21 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     help_flags.contains(args[0]) ||
     (
       args.length() == 2 &&
-      ["plan", "create", "inspect", "magnet", "verify", "edit", "audit-batch"].contains(
-        args[0],
-      ) &&
+      [
+        "plan", "create", "inspect", "magnet", "verify", "edit", "audit-batch", "staging-list",
+        "staging-clean",
+      ].contains(args[0]) &&
       help_flags.contains(args[1])
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.13.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.14.0 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +
       "edit INPUT.torrent OUTPUT.torrent [--tracker URL]... [--web-seed URL]...\n" +
       "audit-batch MANIFEST.json SUMMARY.json (relative inputs use the manifest directory; atomic output requires hard links)\n" +
+      "staging-list PARENT (read-only, at most 4096 direct entries)\nstaging-clean STAGE --operation ID (one verified dead-owner stage, no recursive deletion)\n" +
       "For a single-file torrent PAYLOAD is the file; for a multifile torrent it is the directory containing the listed paths.\n" +
       "Create defaults to auto piece sizing (aims for 4096 pieces, accounts for v2/hybrid file alignment). Use an explicit byte count for a fixed layout.\n" +
       "Plan reads filesystem metadata only: no payload hashes or output files. Piece-layer bytes are an upper bound, not total metainfo size.\n" +
@@ -419,6 +421,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     }
   }
   match args[0] {
+    "staging-list" | "staging-clean" => staging_command(args)
     "audit-batch" => audit_batch_command(parse_args(args, [], false))
     "plan" | "create" => {
       let parsed = parse_args(

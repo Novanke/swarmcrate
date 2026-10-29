@@ -166,9 +166,12 @@ process.on('exit',()=>fs.writeFileSync(process.env.SWARM_CREATE_STATS,JSON.strin
                 assert len(stages) == 1
                 for stage in stages:
                     assert stage.resolve().parent == directory.resolve() and stage.name.startswith('.swarmcrate-')
-                    assert [p.name for p in stage.iterdir()] == ['data']
-                    (stage / 'data').unlink()  # Only our exact, owned test staging file.
-                    stage.rmdir()
+                    assert sorted(p.name for p in stage.iterdir()) == ['data', 'owner.json']
+                    rows = creation_cli('staging-list', directory)['stages']
+                    row = next(r for r in rows if Path(r['path']) == stage.resolve())
+                    assert row['status'] == 'orphan', row
+                    creation_cli('staging-clean', stage, '--operation', row['operation_id'])
+                    assert not stage.exists()
             creation_checks += 1
         single = payload / 'b'
         output, result, events, observed = run(mode, 'single', source=single)

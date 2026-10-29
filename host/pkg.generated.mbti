@@ -10,6 +10,10 @@ pub fn check_scan_unchanged(ScanSnapshot) -> Unit raise @swarmcrate.CrateError
 
 pub fn check_unchanged(String, FileStat) -> Unit raise @swarmcrate.CrateError
 
+pub fn cleanup_staging(StagingInspection, String) -> Unit raise @swarmcrate.CrateError
+
+pub fn inspect_staging(String) -> StagingInspection raise @swarmcrate.CrateError
+
 pub fn read_metainfo(String) -> Bytes raise @swarmcrate.CrateError
 
 pub fn read_range(String, Int64, Int32, stamp? : String) -> Bytes raise @swarmcrate.CrateError
@@ -23,6 +27,10 @@ pub fn resolve_from(String, String) -> String
 pub fn scan(String) -> (String, Bool, Array[DiskSource]) raise @swarmcrate.CrateError
 
 pub fn scan_snapshot(String, max_entries? : Int32) -> ScanSnapshot raise @swarmcrate.CrateError
+
+pub fn scan_staging(String, max_entries? : Int32) -> Array[StagingInspection] raise @swarmcrate.CrateError
+
+pub fn staging_inspection_json(StagingInspection) -> Json
 
 pub fn stat(String) -> FileStat raise @swarmcrate.CrateError
 
@@ -56,6 +64,10 @@ pub(all) struct ScanSnapshot {
   single_file : Bool
   sources : Array[DiskSource]
   directories : Array[DirectorySnapshot]
+}
+
+pub struct StagingInspection {
+  // private fields
 }
 
 // Type aliases

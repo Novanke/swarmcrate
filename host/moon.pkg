@@ -2,6 +2,7 @@ import {
   "Novanke/swarmcrate" @lib,
   "moonbitlang/core/json",
   "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(

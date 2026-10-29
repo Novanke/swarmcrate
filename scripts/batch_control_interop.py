@@ -84,9 +84,11 @@ process.on('exit',()=>fs.writeFileSync(process.env.SWARM_BATCH_STATS,JSON.string
                 assert len(stages) == 1
                 for stage in stages:
                     assert stage.resolve().parent == directory.resolve() and stage.name.startswith('.swarmcrate-')
-                    assert [p.name for p in stage.iterdir()] == ['data']
-                    (stage / 'data').unlink()
-                    stage.rmdir()
+                    assert sorted(p.name for p in stage.iterdir()) == ['data', 'owner.json']
+                    row = next(r for r in cli('staging-list', directory)['stages'] if Path(r['path']) == stage.resolve())
+                    assert row['status'] == 'orphan', row
+                    cli('staging-clean', stage, '--operation', row['operation_id'])
+                    assert not stage.exists()
             else:
                 assert not stages, (label, stages)
             return target, result, events, stats

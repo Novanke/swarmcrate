@@ -31,7 +31,6 @@ extern "js" fn os_io(
   #| (op, input, offset, size, content, expected) => {
   #|   let fd;
   #|   let created = false;
-  #|   let stageDirectory, stageFile;
   #|   let fs, path, target;
   #|   // Relinquish ownership before close: a failing close may already have
   #|   // released the descriptor, so retrying can close an unrelated reused fd.
@@ -52,7 +51,7 @@ extern "js" fn os_io(
   #|       try {
   #|         if (fs.lstatSync(cursor).isSymbolicLink()) throw Error('symbolic links are unsupported');
   #|       } catch (e) {
-  #|         if (e.code === 'ENOENT' && (op === 'stat' || (i === parts.length-1 && (op === 'write' || op === 'publish')))) break;
+  #|         if (e.code === 'ENOENT' && (op === 'stat' || (i === parts.length-1 && op === 'write'))) break;
   #|         throw e;
   #|       }
   #|     }
@@ -101,22 +100,6 @@ extern "js" fn os_io(
   #|       closeOwned();
   #|       return {error:'',bytes};
   #|     }
-  #|     if (op === 'publish') {
-  #|       stageDirectory = fs.mkdtempSync(path.join(path.dirname(target), '.swarmcrate-'));
-  #|       stageFile = path.join(stageDirectory, 'data');
-  #|       fd = fs.openSync(stageFile,'wx',0o644);
-  #|       let used = 0;
-  #|       while (used < content.length) {
-  #|         const n = fs.writeSync(fd,content,used,content.length-used);
-  #|         if (!n) throw Error('short staged write');
-  #|         used += n;
-  #|       }
-  #|       fs.fsyncSync(fd);
-  #|       closeOwned();
-  #|       // Atomic, non-replacing publication on filesystems supporting hard links.
-  #|       fs.linkSync(stageFile,target);
-  #|       return {error:'',text:target};
-  #|     }
   #|     if (op === 'write') {
   #|       fd = fs.openSync(target,'wx',0o644);
   #|       created = true;
@@ -135,9 +118,6 @@ extern "js" fn os_io(
   #|     if (fd !== undefined) { try { closeOwned(); } catch {} }
   #|     if (created) { try { fs.unlinkSync(target); } catch {} }
   #|     return {error:String(e.message || e)};
-  #|   } finally {
-  #|     if (stageFile) { try { fs.unlinkSync(stageFile); } catch {} }
-  #|     if (stageDirectory) { try { fs.rmdirSync(stageDirectory); } catch {} }
   #|   }
   #| }
 
@@ -247,7 +227,7 @@ pub fn write_new_atomic(
   path : String,
   data : Bytes,
 ) -> Unit raise @lib.CrateError {
-  ignore(io("publish", path, content=data))
+  publish_owned(path, data)
 }
 
 ///|

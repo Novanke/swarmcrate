@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+- Add MoonBit staging provenance parsing, local inspection and selected orphan cleanup for atomic creation/batch publication.
+- Preserve active/reused PIDs, legacy/unverified records, unknown members, changed objects and competing cleanup claims; never delete a published target.
+- Recheck opaque plans under an exclusive claim and delete only fixed matching members with nonrecursive directory removal. Report partial cleanup failures without a force fallback.
+- Extend real-process/fault CI with active publishers, abrupt exits before/after linking, two operations, two cleaners, object replacement and deletion failures. See `docs/staging-cleanup.md` for trusted-local-directory assumptions and conservative limits.
+
 ## 0.13.0 — 2026-10-29
 
 - Add opt-in MoonBit `audit_batch_with_control`, immutable batch/verification snapshots and structured progress JSON. Count accepted rows separately from success, and aggregate real I/O deltas without an invented total-byte denominator.
