@@ -33,6 +33,12 @@ extern "js" fn os_io(
   #|   let created = false;
   #|   let stageDirectory, stageFile;
   #|   let fs, path, target;
+  #|   // Relinquish ownership before close: a failing close may already have
+  #|   // released the descriptor, so retrying can close an unrelated reused fd.
+  #|   const closeOwned = () => {
+  #|     const owned = fd; fd = undefined;
+  #|     fs.closeSync(owned);
+  #|   };
   #|   try {
   #|     fs = process.getBuiltinModule('node:fs');
   #|     path = process.getBuiltinModule('node:path');
@@ -50,7 +56,7 @@ extern "js" fn os_io(
   #|         throw e;
   #|       }
   #|     }
-  #|     const stamp = s => `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
+  #|     const stamp = (s, device=s.dev) => `${device}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
   #|     if (op === 'stat') {
   #|       try {
   #|         const s = fs.lstatSync(target,{bigint:true});
@@ -78,7 +84,12 @@ extern "js" fn os_io(
   #|       if (!Number.isSafeInteger(offset) || offset < 0 || size < 0 || size > 1048576) throw Error('invalid read range');
   #|       fd = fs.openSync(target,fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   #|       const before = fs.fstatSync(fd,{bigint:true});
-  #|       if (!before.isFile() || (expected && stamp(before) !== expected)) throw Error('source changed since scan');
+  #|       // Windows Node 22.16 path stat can report dev=0 while fstat reports
+  #|       // the volume number. Compare using the path-observed device, retaining
+  #|       // the opened handle's inode/size/nanosecond times and type checks.
+  #|       const named = process.platform === 'win32' ? fs.lstatSync(target,{bigint:true}) : before;
+  #|       const handleStamp = s => stamp(s,named.dev);
+  #|       if (!before.isFile() || !named.isFile() || (expected && (stamp(named) !== expected || handleStamp(before) !== expected))) throw Error('source changed since scan');
   #|       const bytes = new Uint8Array(size);
   #|       let used = 0;
   #|       while (used < size) {
@@ -86,7 +97,8 @@ extern "js" fn os_io(
   #|         if (!n) throw Error('short read');
   #|         used += n;
   #|       }
-  #|       if (stamp(before) !== stamp(fs.fstatSync(fd,{bigint:true}))) throw Error('source changed during read');
+  #|       if (handleStamp(before) !== handleStamp(fs.fstatSync(fd,{bigint:true}))) throw Error('source changed during read');
+  #|       closeOwned();
   #|       return {error:'',bytes};
   #|     }
   #|     if (op === 'publish') {
@@ -100,7 +112,7 @@ extern "js" fn os_io(
   #|         used += n;
   #|       }
   #|       fs.fsyncSync(fd);
-  #|       fs.closeSync(fd); fd = undefined;
+  #|       closeOwned();
   #|       // Atomic, non-replacing publication on filesystems supporting hard links.
   #|       fs.linkSync(stageFile,target);
   #|       return {error:'',text:target};
@@ -115,15 +127,15 @@ extern "js" fn os_io(
   #|         used += n;
   #|       }
   #|       fs.fsyncSync(fd);
+  #|       closeOwned();
   #|       return {error:'',text:target};
   #|     }
   #|     throw Error('unknown I/O operation');
   #|   } catch (e) {
-  #|     if (fd !== undefined) { try { fs.closeSync(fd); } catch {} fd = undefined; }
+  #|     if (fd !== undefined) { try { closeOwned(); } catch {} }
   #|     if (created) { try { fs.unlinkSync(target); } catch {} }
   #|     return {error:String(e.message || e)};
   #|   } finally {
-  #|     if (fd !== undefined) fs.closeSync(fd);
   #|     if (stageFile) { try { fs.unlinkSync(stageFile); } catch {} }
   #|     if (stageDirectory) { try { fs.rmdirSync(stageDirectory); } catch {} }
   #|   }

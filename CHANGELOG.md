@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1 — 2026-10-29
+
+- Reject more than 400,000 SHA-1 pieces in the public hashing helper before allocating the piece buffer or invoking storage. Test the exact accepted boundary without creating a giant payload.
+- Keep read/write/atomic-stage close failures inside the structured I/O error boundary. Relinquish descriptor ownership before close and never retry an ambiguous close failure; verification marks the affected piece unreadable and continues instead of crashing.
+- Fix Windows Node.js 22.16.0 path-stat/device versus handle-stat/device disagreement, which incorrectly rejected stable files as changed. Keep handle inode, exact size and nanosecond time checks, compare the current path observation too, and preserve source-change rejection.
+- Run the full Windows/Linux CI matrix on Node.js 22.16.0 and 24. Add 21 synthetic close-failure disk scenarios covering metainfo/payload reads, later-piece continuation, FAIL receipts, ordinary writes and unpublished atomic staging. Correct obsolete creation-control descriptions; public API signatures and report schemas remain unchanged.
+
 ## 0.11.0 — 2026-10-28
 
 - Add `create_torrent_with_control` and scalar `CreationProgress`, with separate read, pre-encoding and validated-finalization checkpoints. Cancel/observer/read failures return no metainfo, including after 100% of payload reads or after encoding. Preflight before freezing caller-owned path/endpoint arrays; preserve canonical bytes, original read indices and single-pass hybrid I/O.

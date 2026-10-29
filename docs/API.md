@@ -15,7 +15,7 @@ The root package is portable MoonBit, tested on Wasm GC and JavaScript. `/host` 
 | `expected_v1_pieces(data)` | Concatenated 20-byte SHA-1 hashes; empty for pure v2. |
 | `expected_v2_files(data)` | File roots and piece layers in inspected file order; empty for pure v1. |
 | `torrent_storage_bytes(data)` | V1/hybrid storage including virtual padding; real bytes for pure v2. |
-| `sha1_pieces(files, pieceLength, read)` | Hash the supplied order exactly; crosses file boundaries and skips empty files. |
+| `sha1_pieces(files, pieceLength, read)` | Hash the supplied order exactly; crosses file boundaries and skips empty files. Reject invalid widths and more than 400,000 pieces before any read callback. |
 | `piece_spans(files, pieceLength, index)` | Map a v1 piece in the supplied **unpadded** file concatenation to real ranges. For padded v1/hybrid input use `verify_payload` reports, which account for virtual padding internally. |
 | `hash_v2_file(length, pieceLength, read)` | Block/Merkle hashing; callback has no file index. Empty files return empty root/layer. |
 | `validate_piece_layer(root, length, pieceLength, layer)` | Authenticate a multi-piece file's entire layer against its root. |
@@ -68,7 +68,7 @@ No cancellable callback runs after publication begins. A process interrupted dur
 
 Check totals describe the selected scope and count both hybrid schemes. Completed counts are not a passing result. Read counts represent callback attempts; validated byte counts include only exact successful chunks, not failed/partial reads or OS traffic. An empty-file selection may have zero checks but still fail its size/existence check. Source selection, hash layout and legacy JSON/exit codes are unchanged.
 
-Cancellation is cooperative, not preemptive or asynchronous; creation, browser event-loop/Worker integration and resume are not implemented here. Callers own storage stability and only save returned receipts after their own final source check. See [checkpoint fields, limits and executable consumers](sdk-control.md).
+Cancellation is cooperative, not preemptive or asynchronous; browser event-loop/Worker integration and resume are not implemented here. Creation has its own separate control API described above. Callers own storage stability and only save returned receipts after their own final source check. See [checkpoint fields, limits and executable consumers](sdk-control.md).
 
 ## Per-file candidate ranges
 
@@ -93,3 +93,5 @@ Import `Novanke/swarmcrate/host` in a JS-targeted package. `scan_snapshot(path, 
 `DirectorySnapshot` holds an absolute path, the initial `FileStat`, and sorted immediate child names. `check_scan_unchanged` rechecks all listed files and directories, including empty directories. The existing `scan(path)` tuple API remains available, but its tuple does not retain directory snapshots; use the new API when writing created metadata.
 
 Scanning counts both files and directories against a shared descendant-entry budget, excluding the input root. The budget can be lowered to any value in 1..200000. Single-file input consumes one source slot. Existing limits of 65536 real files and 32 path components also apply. Directory enumeration is incremental and stops when the supplied remaining budget is exhausted; the OS handle closes on success and errors. Limit violations retain error code `limit`, while filesystem failures retain their I/O cause rather than being masked as JSON parsing failures. These filesystem policies are implemented in MoonBit; the Node bridge only enumerates and reads/writes OS objects.
+
+From 0.11.1, file-close failures stay inside `CrateError("io", detail)` handling; a verification read-close failure marks that piece unreadable and later pieces continue. A descriptor is relinquished before close and is not retried after an ambiguous failure. Windows path and handle identity comparisons account for Node 22.16.0 device-field reporting without removing inode/size/nanosecond-time checks. See [runtime compatibility and fault reproduction](runtime-compatibility.md).

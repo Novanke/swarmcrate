@@ -40,3 +40,33 @@ test "v1 pieces cross files handle empty files and reject short reads" {
     b"",
   )
 }
+
+///|
+test "public SHA1 hashing rejects oversized work before the reader is called" {
+  for
+    (length, expected) in [
+      (6553600001L, "limit"),
+      (6553600000L, "reader_reached"),
+    ] {
+    let mut reads = 0
+    let code = try {
+      ignore(
+        sha1_pieces([{ path: ["large"], length, }], 16384, fn(
+          _,
+          _,
+          _,
+        ) raise CrateError {
+          reads += 1
+          raise CrateError(
+            "reader_reached", "boundary probe; no payload allocated",
+          )
+        }),
+      )
+      "returned"
+    } catch {
+      CrateError(code, _) => code
+    }
+    assert_eq(code, expected)
+    assert_eq(reads, if expected == "limit" { 0 } else { 1 })
+  }
+}

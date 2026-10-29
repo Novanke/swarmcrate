@@ -7,13 +7,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+        node: ['22.16.0', '24']
     runs-on: ${{ matrix.os }}
     continue-on-error: false
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -30,6 +31,7 @@ jobs:
       - name: Format interfaces and both backends
         shell: bash
         run: |
+          node --version
           python scripts/check_toolchain.py
           moon update
           moon fmt --check
@@ -55,3 +57,4 @@ jobs:
           python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
           python scripts/control_interop.py
           python scripts/creation_interop.py
+          python scripts/io_faults.py

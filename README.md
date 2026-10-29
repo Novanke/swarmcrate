@@ -77,7 +77,7 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --diagnostics ./f
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.11.0
+node scripts/demo.mjs --output ./artifacts/demo-0.11.1
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告及凭据，以及指定文件的局部校验报告与凭据；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
@@ -85,7 +85,7 @@ node scripts/demo.mjs --output ./artifacts/demo-0.11.0
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.11.0
+moon add Novanke/swarmcrate@0.11.1
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -123,7 +123,7 @@ moon run examples/library --target js --release --deny-warn
 
 示例依次规划并创建 v1、v2、混合种子，输出元数据、磁力链接、完整核验报告和不可变凭据快照，再主动破坏内容并检查能否发现损坏。两个后端都由 CI 实际执行。消费方包的导入方式与示例的 `moon.pkg` 相同。
 
-从 0.10.0 起，SDK 可用 `verify_with_control(..., on_progress)` 接收同步进度并协作取消。回调返回 `false` 或抛出错误时不返回完整报告/凭据，包括检查计数已完成但尚未返回的阶段。进度不能替代最终通过结果；当前控制范围是核验，不包含创建、异步 I/O 或浏览器事件循环适配。完整契约与真实文件消费方见 [SDK 进度与取消](docs/sdk-control.md)：
+从 0.10.0 起，SDK 可用 `verify_with_control(..., on_progress)` 接收同步进度并协作取消。回调返回 `false` 或抛出错误时不返回完整报告/凭据，包括检查计数已完成但尚未返回的阶段。进度不能替代最终通过结果；核验与创建分别使用独立控制接口；均不包含异步 I/O 或浏览器事件循环适配。完整契约与真实文件消费方见 [SDK 进度与取消](docs/sdk-control.md)：
 
 ```sh
 moon run examples/controlled --target wasm-gc --release --deny-warn
@@ -168,9 +168,10 @@ moon build --target js --release --deny-warn
 python scripts/source_audit.py
 python -m pip install libtorrent==2.1.1 torf==4.3.1
 python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
+python scripts/io_faults.py
 ```
 
-当前有 **43 个核心测试块**，JS 加文件系统/CLI 测试共 **52 个测试块**。独立互操作脚本通过 **215 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
+当前有 **44 个核心测试块**，JS 加文件系统/CLI 测试共 **53 个测试块**。独立互操作脚本通过 **215 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
 
 文件级诊断测试还覆盖字节位图区间并集对照、大偏移字符串、混合格式去重、缺失/短/长/空文件、邻居归属和不完整清单。新增 32 个磁盘场景对照实际文件、独立 v1 补零和三类输出保护；真实异常/短读观测同时导出诊断，确认不会重复读取载荷。
 
@@ -178,7 +179,9 @@ python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 
 `scripts/creation_interop.py` 另有 **78 个真实文件创建场景**，覆盖所有取消/回调错误阶段、单/多文件、来源变化、已有/竞争目标、部分或零写入、同步/链接失败，以及发布前后模拟进程中断。四个新增核心测试块验证输出字节兼容、索引、取消及输入冻结；host/CLI 测试验证新发布原语和最后取消门槛。
 
-仅根目录自写库代码：**3,237 行非空非注释源码，2,006 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
+0.11.1 额外验证 **21 个关闭故障场景**：读取/写入关闭失败仍返回结构化错误，核验继续后续分片并保存 FAIL 凭据，原子暂存关闭失败不发布目标，不重试可能已被 OS 释放的句柄。CI 覆盖 Windows/Linux × Node 22.16.0/24；最低版本实测发现的设备字段差异已修复，完整互操作仍验证来源变化拦截。公开 SHA-1 工具函数也在读取前拒绝超过 400,000 分片的任务；详见[运行环境与独立复现](docs/runtime-compatibility.md)。
+
+仅根目录自写库代码：**3,241 行非空非注释源码，2,009 行保守函数体统计**；已排除测试、文档、生成接口、依赖、CLI、基准程序和 JS 桥接。该统计是透明复核材料，不替代主办方计数。实际功能提交见 [实现记录](docs/implementation-record.md)，版本变化见 [更新记录](CHANGELOG.md)。
 
 混合核验的 8 MiB + 3 字节合成对照中，相比注册表 0.4.0，读取量从 16,777,222 降至 8,388,611 字节，回调次数由 66 降至 33，两套哈希检查仍共 66 次。该结果说明读取量减少，不等于 CPU 哈希工作减半；性能对照与复现方式见 [基准说明](docs/performance.md)。验收项与仓库证据的对应关系见 [验收自查](docs/review-readiness.md)，关键原理与取舍见 [设计说明](docs/design.md)。
 

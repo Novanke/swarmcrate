@@ -121,12 +121,17 @@ fn v1_hash_entries(
 ///|
 /// Hash the exact caller-supplied file order, crossing file boundaries (BEP 3).
 /// The callback must return exactly the requested bytes; only one piece is buffered.
+/// Reject layouts above 400,000 pieces before calling the reader.
 pub fn sha1_pieces(
   files : Array[SourceFile],
   piece_length : Int32,
   read : (Int32, Int64, Int32) -> Bytes raise CrateError,
 ) -> Bytes raise CrateError {
-  ignore(validate_sources(files))
+  let total = validate_sources(files)
+  check_piece_length(piece_length)
+  if (total + piece_length.to_int64() - 1L) / piece_length.to_int64() > 400000L {
+    reject("limit", "too many pieces; select a larger piece length")
+  }
   let entries = files.mapi(fn(i, f) {
     DataEntry::{ source: i, length: f.length, padding: false, }
   })
