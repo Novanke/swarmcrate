@@ -66,3 +66,4 @@ jobs:
           python scripts/io_faults.py
           python scripts/batch_control_interop.py
           python scripts/staging_interop.py
+          python scripts/output_safety_interop.py

@@ -167,16 +167,13 @@ fn create_impl(
   on_progress : ((@lib.CreationProgress) -> Bool raise @lib.CrateError)?,
 ) -> CommandResult raise @lib.CrateError {
   arity(args, 2)
-  let input = prepare_input(args)
   let output = @host.resolve(args.positionals[1])
-  if on_progress is Some(_) {
-    if @host.stat(output).kind != "missing" ||
-      @host.stat(@host.resolve(output) + "/..").kind != "directory" {
-      fail(
-        "controlled creation requires a new output and an existing parent directory",
-      )
-    }
+  ignore(@host.canonical_path(output))
+  if @host.stat(output).kind != "missing" ||
+    @host.stat(output + "/..").kind != "directory" {
+    fail("creation requires a new output and an existing parent directory")
   }
+  let input = prepare_input(args)
   let read = fn(i : Int32, offset : Int64, n : Int32) raise @lib.CrateError {
     @host.read_source(input.snapshot.sources, i, offset, n)
   }
@@ -222,13 +219,45 @@ fn create_impl(
 }
 
 ///|
-fn output_key(path : String) -> String raise @lib.CrateError {
-  @host.resolve(path)
-  .split("\\")
-  .map(fn(s) { s.to_owned() })
-  .to_array()
-  .join("/")
-  .to_lower()
+fn output_key(
+  path : String,
+  input~ : Bool = false,
+) -> String raise @lib.CrateError {
+  // Invalid/unreadable inputs remain task/scope-local errors. Never authorize
+  // a link traversal here; keep their lexical guard while outputs stay strict.
+  let canonical = @host.canonical_path(path) catch {
+    @lib.CrateError(code, detail) =>
+      if input {
+        @host.resolve(path)
+      } else {
+        raise @lib.CrateError(code, detail)
+      }
+  }
+  let key = canonical
+    .split("\\")
+    .map(fn(s) { s.to_owned() })
+    .to_array()
+    .join("/")
+    .to_lower()
+  if key.has_prefix("//?/unc/") {
+    "//" + key[8:].to_owned()
+  } else if (key.has_prefix("//?/") || (input && key.has_prefix("//./"))) &&
+    key.length() >= 7 &&
+    key[5] == ':' &&
+    key[6] == '/' {
+    key[4:].to_owned()
+  } else if !input && (key.has_prefix("//?/") || key.has_prefix("//./")) {
+    fail("unsupported device namespace")
+    ""
+  } else {
+    key
+  }
+}
+
+///|
+fn path_key_contains(parent : String, child : String) -> Bool {
+  parent == child ||
+  child.has_prefix(if parent.has_suffix("/") { parent } else { parent + "/" })
 }
 
 ///|
@@ -240,7 +269,9 @@ fn preflight_reports(
     return
   }
   let keys : Map[String, Bool] = Map([])
-  let payload_keys = payload_paths.map(output_key)
+  let payload_keys = payload_paths.map(fn(path) raise @lib.CrateError {
+    output_key(path, input=true)
+  })
   for output in outputs {
     let key = output_key(output)
     if keys.contains(key) {
@@ -248,9 +279,7 @@ fn preflight_reports(
     }
     keys[key] = true
     for payload in payload_keys {
-      if key == payload ||
-        key.has_prefix(payload + "/") ||
-        payload.has_prefix(key + "/") {
+      if path_key_contains(payload, key) || path_key_contains(key, payload) {
         fail("report output overlaps a listed payload path: " + output)
       }
     }
@@ -403,7 +432,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.14.0 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.14.1 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +

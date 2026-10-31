@@ -1,4 +1,45 @@
 ///|
+test "path overlap handles filesystem roots and sibling boundaries" {
+  for
+    (parent, child) in [
+      ("/", "/output.json"),
+      ("c:/", "c:/dir/file"),
+      ("//server/share/", "//server/share/dir/file"),
+      ("/base", "/base/missing/file"),
+      ("/base", "/base"),
+    ] {
+    assert_true(path_key_contains(parent, child))
+  }
+  assert_true(!path_key_contains("/base", "/base-other/file"))
+  assert_true(!path_key_contains("c:/data", "d:/data/file"))
+}
+
+///|
+test "creation rejects invalid destinations before scanning and observing progress" {
+  let dir = cli_fixture()
+  let mut events = 0
+  for
+    output in [
+      dir + "/input/a.txt",
+      dir + "/missing/result.torrent",
+      dir + "/input",
+    ] {
+    let args = ["create", dir + "/not-scanned", output]
+    let regular = execute(args)
+    assert_eq(regular.code, 1)
+    assert_true(regular.output.contains("creation requires"))
+    let controlled = execute_create_with_control(args, fn(_) {
+      events += 1
+      true
+    })
+    assert_eq(controlled.code, 1)
+  }
+  assert_eq(events, 0)
+  assert_eq(@host.read_metainfo(dir + "/input/a.txt"), b"hello")
+  cli_cleanup(dir)
+}
+
+///|
 extern "js" fn cli_fixture() -> String =
   #| () => {
   #|   const fs=process.getBuiltinModule('node:fs'),os=process.getBuiltinModule('node:os'),p=process.getBuiltinModule('node:path');

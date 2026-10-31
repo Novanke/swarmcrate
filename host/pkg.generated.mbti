@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn canonical_path(String) -> String raise @swarmcrate.CrateError
+
 pub fn check_scan_unchanged(ScanSnapshot) -> Unit raise @swarmcrate.CrateError
 
 pub fn check_unchanged(String, FileStat) -> Unit raise @swarmcrate.CrateError

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1
+
+- Preflight ordinary and controlled creation destinations before scanning/hashing.
+- Resolve existing filesystem aliases for MoonBit report/batch output guards; handle drive/root containment and reject ambiguous Windows stream/trailing-dot paths.
+- Preserve a competing writer's replacement when ordinary write cleanup follows a close error.
+- Reject additional Windows device-name forms in portable metadata, fix sequential cancellation examples, and add real output/alias/ownership regression coverage to every CI matrix job.
+
 ## 0.14.0
 
 - Add MoonBit staging provenance parsing, local inspection and selected orphan cleanup for atomic creation/batch publication.

@@ -1,4 +1,26 @@
 ///|
+test "canonical paths preserve missing tails and reject non-directory ancestors" {
+  let dir = fixture()
+  assert_eq(
+    canonical_path(dir + "/folder/../folder/hello.txt"),
+    canonical_path(dir + "/folder/hello.txt"),
+  )
+  assert_eq(
+    canonical_path(dir + "/missing/child"),
+    resolve_from(canonical_path(dir), "missing/child"),
+  )
+  assert_true(
+    try {
+      ignore(canonical_path(dir + "/folder/hello.txt/child"))
+      false
+    } catch {
+      _ => true
+    },
+  )
+  cleanup_fixture(dir)
+}
+
+///|
 extern "js" fn fixture() -> String =
   #| () => {
   #|   const fs=process.getBuiltinModule('node:fs'),os=process.getBuiltinModule('node:os'),p=process.getBuiltinModule('node:path');

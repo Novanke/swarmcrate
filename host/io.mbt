@@ -31,6 +31,8 @@ extern "js" fn os_io(
   #| (op, input, offset, size, content, expected) => {
   #|   let fd;
   #|   let created = false;
+  #|   let createdIdentity;
+  #|   const objectId = s => !s.ino || s.birthtimeNs<=0n ? undefined : `${process.platform==='win32'?'win':s.dev}:${s.ino}:${s.birthtimeNs}`;
   #|   let fs, path, target;
   #|   // Relinquish ownership before close: a failing close may already have
   #|   // released the descriptor, so retrying can close an unrelated reused fd.
@@ -43,6 +45,31 @@ extern "js" fn os_io(
   #|     path = process.getBuiltinModule('node:path');
   #|     target = path.resolve(input);
   #|     if (op === 'resolve') return {error:'', text:target};
+  #|     if (op === 'canonical') {
+  #|       if(process.platform==='win32' && target.startsWith('\\\\.\\')){
+  #|         const rest=target.slice(4);
+  #|         if(/^[A-Za-z]:\\/.test(rest))target=rest;
+  #|         else throw Error('non-filesystem device namespaces are unsupported');
+  #|       }
+  #|       if(process.platform==='win32' && target.startsWith('\\\\?\\')){
+  #|         const rest=target.slice(4);
+  #|         if(/^UNC\\/i.test(rest))target='\\\\'+rest.slice(4);
+  #|         else if(/^[A-Za-z]:\\/.test(rest))target=rest;
+  #|         else throw Error('unsupported extended device namespace');
+  #|       }
+  #|       const root=path.parse(target).root,parts=target.slice(root.length).split(path.sep).filter(Boolean);
+  #|       if(process.platform==='win32' && parts.some(p=>p.includes(':')||/[ .]$/.test(p)))throw Error('alternate streams and trailing dot/space paths are unsupported');
+  #|       let cursor=root,observed=fs.lstatSync(root);
+  #|       if(observed.isSymbolicLink())throw Error('symbolic links are unsupported');
+  #|       for(let i=0;i<parts.length;i++){
+  #|         if(!observed.isDirectory())throw Error('non-directory path ancestor');
+  #|         const next=path.join(cursor,parts[i]);
+  #|         try{observed=fs.lstatSync(next);}catch(e){if(e.code!=='ENOENT')throw e;return {error:'',text:path.join(fs.realpathSync.native(cursor),...parts.slice(i))};}
+  #|         if(observed.isSymbolicLink())throw Error('symbolic links are unsupported');
+  #|         cursor=next;
+  #|       }
+  #|       return {error:'',text:fs.realpathSync.native(cursor)};
+  #|     }
   #|     const root = path.parse(target).root;
   #|     const parts = target.slice(root.length).split(path.sep).filter(Boolean);
   #|     let cursor = root;
@@ -103,6 +130,7 @@ extern "js" fn os_io(
   #|     if (op === 'write') {
   #|       fd = fs.openSync(target,'wx',0o644);
   #|       created = true;
+  #|       createdIdentity = objectId(fs.fstatSync(fd,{bigint:true}));
   #|       let used = 0;
   #|       while (used < content.length) {
   #|         const n = fs.writeSync(fd,content,used,content.length-used);
@@ -116,7 +144,7 @@ extern "js" fn os_io(
   #|     throw Error('unknown I/O operation');
   #|   } catch (e) {
   #|     if (fd !== undefined) { try { closeOwned(); } catch {} }
-  #|     if (created) { try { fs.unlinkSync(target); } catch {} }
+  #|     if (created && createdIdentity) { try {const current=fs.lstatSync(target,{bigint:true});if(current.isFile()&&objectId(current)===createdIdentity)fs.unlinkSync(target);} catch {} }
   #|     return {error:String(e.message || e)};
   #|   }
   #| }
@@ -193,6 +221,13 @@ pub fn check_unchanged(
 ///|
 pub fn resolve(path : String) -> String raise @lib.CrateError {
   io("resolve", path).text()
+}
+
+///|
+/// Resolve existing OS path aliases and append missing tail components without creating them.
+/// Links and ambiguous Windows stream/trailing-dot paths are rejected; this is not an atomic snapshot.
+pub fn canonical_path(path : String) -> String raise @lib.CrateError {
+  io("canonical", path).text()
 }
 
 ///|

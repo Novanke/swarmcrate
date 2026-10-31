@@ -16,7 +16,7 @@ import torf
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("--node", default="node")
-parser.add_argument("--cli", type=Path, default=ROOT / "_build/js/debug/build/cmd/main/main.js")
+parser.add_argument("--cli", type=Path, default=ROOT / "_build/js/release/build/cmd/main/main.js")
 args = parser.parse_args()
 checks = 0
 
@@ -167,9 +167,8 @@ def source_snapshot_verification(directory):
             (payload / "b.txt").write_bytes(b"secondary")
             output = directory / f"snapshot-{mode}-{action}.torrent"
             counts = directory / f"snapshot-{mode}-{action}.json"
-            protect_existing = mode == "hybrid" and action == "rename-empty"
-            if protect_existing:
-                output.write_bytes(b"preserve existing output")
+            # Keep every mutation case on a fresh target. Existing destinations
+            # are rejected before scanning and covered by output_safety_interop.py.
             env = {**os.environ, "SWARM_SNAPSHOT_ROOT": str(payload), "SWARM_SNAPSHOT_ACTION": action,
                    "SWARM_SNAPSHOT_RESULT": str(counts)}
             result = subprocess.run([args.node, "--import", preload.as_uri(), str(args.cli),
@@ -195,10 +194,7 @@ def source_snapshot_verification(directory):
             else:
                 assert observed["mutations"] == 1
                 assert json.loads(result.stdout)["error"] == "changed", result.stdout
-                if protect_existing:
-                    assert output.read_bytes() == b"preserve existing output"
-                else:
-                    assert not output.exists(), "stale metadata must not be committed"
+                assert not output.exists(), "stale metadata must not be committed"
             assert (payload / "a.bin").read_bytes() == data
             assert (payload / "b.txt").read_bytes() == b"secondary"
             checks += 1

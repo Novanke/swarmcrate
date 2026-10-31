@@ -21,7 +21,23 @@ test "portable file sets reject traversal collisions devices and overflow" {
   ]
   assert_eq(validate_sources(files), 3L)
   assert_eq(sorted_source_indices(files), [2, 0, 1])
-  for path in [["..", "x"], ["a/b"], ["CON.txt"], ["a "], [".pad", "5"], [""]] {
+  for
+    path in [
+      ["..", "x"],
+      ["a/b"],
+      ["CON.txt"],
+      ["COM¹.txt"],
+      ["com²"],
+      ["COM³.log"],
+      ["dir", "LPT¹.txt"],
+      ["lpt²"],
+      ["LPT³"],
+      ["CONIN$"],
+      ["conout$"],
+      ["a "],
+      [".pad", "5"],
+      [""],
+    ] {
     let bad = try {
       ignore(validate_sources([{ path, length: 0L, }]))
       false
@@ -30,6 +46,13 @@ test "portable file sets reject traversal collisions devices and overflow" {
     }
     assert_true(bad)
   }
+  assert_eq(
+    validate_sources([
+      { path: ["COM10.txt"], length: 1L, },
+      { path: ["lpt20"], length: 1L, },
+    ]),
+    2L,
+  )
   for
     sources in [
       [{ path: ["a"], length: 0L, }, { path: ["A"], length: 0L, }],

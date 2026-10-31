@@ -55,7 +55,7 @@ moon run examples/batch_controlled --target js --release --deny-warn
 moon build --target js --release --deny-warn
 node _build/js/release/build/examples/batch_controlled_io/batch_controlled_io.js full audit-batch jobs.json summary.json
 node _build/js/release/build/examples/batch_controlled_io/batch_controlled_io.js cancel-before_write audit-batch jobs.json cancelled.json
-node _build/js/release/build/examples/batch_controlled_io/batch_controlled_io.js --cancel-file ./cancel.flag audit-batch jobs.json summary.json
+node _build/js/release/build/examples/batch_controlled_io/batch_controlled_io.js --cancel-file ./cancel.flag audit-batch jobs.json cancel-file-summary.json
 python scripts/batch_control_interop.py
 ```
 
