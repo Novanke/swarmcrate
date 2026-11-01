@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.2
+
+- Keep additional conservative MoonBit output guards for Windows input spellings whose canonical identity is unavailable: trailing dots/spaces, stream suffixes and short-name ancestors. Never rewrite actual input I/O or relax strict output validation.
+- Preserve task-local errors and safe outside-summary publication; retain legal POSIX dot/space names. Add real regression cases for single reports, batch output, short-path combinations and outside-output controls.
+
 ## 0.14.1
 
 - Preflight ordinary and controlled creation destinations before scanning/hashing.

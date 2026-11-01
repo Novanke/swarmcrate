@@ -1,4 +1,4 @@
-# Output safety and final-review fixes — 0.14.1
+# Output safety and final-review fixes — 0.14.2
 
 This maintenance release fixes independently reproduced failures in the existing offline workflow. It adds no downloader or network service. Core portable-name validation and CLI preflight/overlap policy remain MoonBit; the Node bridge supplies filesystem observations and checked I/O.
 
@@ -17,6 +17,14 @@ This closes a reproduced case where `verify --file good --receipt` or `audit-bat
 Output normalization is strict. When an input cannot be safely normalized, its lexical guard is retained and the existing loader/required-file checks report the task error; a bad task does not abort later tasks, and an unselected unusable input does not block a valid partial report. This fallback never grants permission to follow links or use unsupported input paths.
 
 The canonical path is for preflight, not an authorization token or atomic filesystem snapshot. Writes keep their frozen absolute targets and exclusive creation. Stable trusted local directories remain required; malicious directory replacement and unsupported filesystem aliases are not claimed to be solved.
+
+## Preserve guards for unsupported Windows input spellings
+
+0.14.2 fixes a separately reproduced gap in the 0.14.1 input-error fallback. With a declared payload directory ending in a dot/space, strict canonicalization failed, while its lexical spelling did not match the normal directory. Verification reported missing content but still created the normal declared missing payload file as its receipt. An error result must not allow writes into declared input locations.
+
+MoonBit now retains the original input key **and** an additional conservative key for Windows absolute drive/UNC paths: strip per-component stream suffixes and trailing dots/spaces for comparison, protect the known ancestor for an all-dot/space component, then attempt canonicalization again to resolve short-name ancestors. POSIX paths remain independent legal names. Output normalization stays strict. Actual reads keep their original spelling; this does not add support for these ambiguous input forms or turn a failed audit into a pass. Safely outside outputs still preserve task-local failure isolation and later valid tasks.
+
+On Windows with an available short-name fixture, the output script executes 76 cases, including 36 alias cases; otherwise it reports the smaller actual count. POSIX runs 37 cases, including legal dot/space input directories with independently writable sibling outputs. Both are separate from core test-block counts. Unknown filesystem aliases, hostile directory changes and volume namespaces remain outside the guarantees above.
 
 ## Preserve another writer's replacement after an error
 

@@ -45,7 +45,7 @@ The later interoperability, CI and documentation commits are additional evidence
 
 - Toolchain: MoonBit stable 2026-10-16, moon `0.1.20261016`, moonc `v0.10.16+b1a0e846e`.
 - Wasm GC: 55 core test blocks passed with warnings denied.
-- JS: 81 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
+- JS: 82 blocks passed, including real filesystem and CLI scenarios, with warnings denied.
 - Independent real-file script: 215 scenarios passed using libtorrent `2.1.1.0`, torf `4.3.1`, and Python's SHA-1/SHA-256.
 - The script checks output acceptance and hashes, reads and verifies libtorrent-generated v1/v2/hybrid torrents, exercises Unicode/nested/empty files, piece/block boundaries, corruption, truncation, missing payload, HTML output, no overwrite and endpoint edits.
 - No network session, tracker connection, download or seeding is used in these checks.
@@ -79,3 +79,5 @@ Reproduce with the commands in the README and inspect CI logs for the exact publ
 0.14.0 adds bounded portable staging-owner parsing/classification and opaque MoonBit host inspection/cleanup. New atomic stages carry original object identities and a matching local receipt; only a positively absent owner with exact evidence is eligible. Cleanup selects one operation, acquires an exclusive claim, rechecks snapshots, unlinks fixed members and never recursively deletes or touches the published target. Two core and three host blocks plus 26 real-process scenarios on Windows Node 22.16 cover active writers, abrupt exits, foreign/legacy/changed data, two actual competing cleaners and partial cleanup errors (symlink fixtures additionally run when permitted). Trusted local-directory assumptions and unverified crash windows remain explicit.
 
 0.14.1 fixes reproduced output-preflight and filesystem-alias failures in MoonBit host/CLI policy, root-path containment, original-object cleanup after competing replacement, and portable Windows device names. The baseline read a whole 1,048,577-byte payload for unusable outputs; fixed preflight performs zero payload opens. Windows namespace/short aliases can no longer route reports into declared missing payloads. Real tests cover ordinary/controlled creation and all report kinds, preserving peer bytes on close faults. Source, CI and exact registry consumption retain the full existing release chain.
+
+0.14.2 retains both lexical and conservative Win32 input guards in MoonBit when strict canonicalization fails, then resolves known short-name ancestors for the additional key. This fixes a synthetic 0.14.1 reproduction that created a missing declared payload file as a report after a trailing-dot/space input failed to read. Input I/O is not rewritten, bad task isolation remains, and POSIX legal dot/space names are not folded.

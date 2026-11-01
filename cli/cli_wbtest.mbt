@@ -1,4 +1,22 @@
 ///|
+test "conservative Windows input guards preserve drive roots and POSIX names" {
+  for
+    (input, expected) in [
+      ("c:/mirror./missing.json", "c:/mirror/missing.json"),
+      ("c:/mirror /missing.json", "c:/mirror/missing.json"),
+      ("c:/mirror/file:stream", "c:/mirror/file"),
+      ("c:/.../file", "c:/"),
+      (
+        "//server/share/mirror. /missing.json", "//server/share/mirror/missing.json",
+      ),
+      ("/mirror./file:stream", "/mirror./file:stream"),
+      ("c:/mirror/file", "c:/mirror/file"),
+    ] {
+    assert_eq(windows_input_guard(input), expected)
+  }
+}
+
+///|
 test "path overlap handles filesystem roots and sibling boundaries" {
   for
     (parent, child) in [

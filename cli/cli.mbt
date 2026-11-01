@@ -261,6 +261,38 @@ fn path_key_contains(parent : String, child : String) -> Bool {
 }
 
 ///|
+// Failed input normalization must not hide a possible Win32 alias from the
+// output guard. This is conservative comparison only, never an I/O rewrite.
+fn windows_input_guard(key : String) -> String {
+  let drive = key.length() >= 3 && key[1] == ':' && key[2] == '/'
+  if !drive && !key.has_prefix("//") {
+    return key
+  }
+  let parts : Array[String] = []
+  for index, part in key.split("/") {
+    let original = part.to_owned()
+    if (drive && index == 0) || original == "" {
+      parts.push(original)
+      continue
+    }
+    let base = match original.split_once(":") {
+      Some((name, _)) => name.to_owned()
+      None => original
+    }
+    let mut end = base.length()
+    while end > 0 && (base[end - 1] == '.' || base[end - 1] == ' ') {
+      end -= 1
+    }
+    if end == 0 {
+      // An ambiguous all-dot/space component protects its whole ancestor.
+      return parts.join("/") + "/"
+    }
+    parts.push(base[:end].to_owned())
+  }
+  parts.join("/")
+}
+
+///|
 fn preflight_reports(
   outputs : Array[String],
   payload_paths : Array[String],
@@ -269,9 +301,17 @@ fn preflight_reports(
     return
   }
   let keys : Map[String, Bool] = Map([])
-  let payload_keys = payload_paths.map(fn(path) raise @lib.CrateError {
-    output_key(path, input=true)
-  })
+  let payload_keys : Array[String] = []
+  for path in payload_paths {
+    let key = output_key(path, input=true)
+    payload_keys.push(key)
+    let conservative = windows_input_guard(key)
+    if conservative != key {
+      // Resolve existing short-name ancestors after removing ambiguous suffixes.
+      // Keep the lexical key as well; unsupported inputs remain task-local.
+      payload_keys.push(output_key(conservative, input=true))
+    }
+  }
   for output in outputs {
     let key = output_key(output)
     if keys.contains(key) {
@@ -432,7 +472,7 @@ fn dispatch(args : Array[String]) -> CommandResult raise @lib.CrateError {
     ) {
     return {
       code: 0,
-      output: "SwarmCrate 0.14.1 — offline BitTorrent metadata and payload verification\n" +
+      output: "SwarmCrate 0.14.2 — offline BitTorrent metadata and payload verification\n" +
       "plan INPUT [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "create INPUT OUTPUT.torrent [--mode v1|v2|hybrid] [--piece-length auto|BYTES] [--name NAME] [--tracker URL]... [--web-seed URL]... [--private] [--comment TEXT]\n" +
       "inspect INPUT.torrent\nmagnet INPUT.torrent\nverify INPUT.torrent PAYLOAD [--file RELATIVE/PATH]... [--receipt RECEIPT.json] [--diagnostics FILES.json] [--html REPORT.html] [--detail-limit 1..10000]\n" +

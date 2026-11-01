@@ -99,6 +99,9 @@ process.on('exit',()=>fs.writeFileSync(process.env.SWARM_SAFETY_STATS,JSON.strin
             device_drive = lambda p: '\\\\.\\' + str(p)
             aliases = [(str(payload), extended(missing)), (extended(payload), str(missing)),
                        (str(payload), device_drive(missing)), (device_drive(payload), str(missing))]
+            # Even unsupported input spellings must not allow publication into
+            # the normal declared root after canonicalization falls back.
+            aliases.extend((str(payload) + suffix, str(missing)) for suffix in ['.', ' '])
             get_short = ctypes.WinDLL('kernel32', use_last_error=True).GetShortPathNameW
             get_short.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
             get_short.restype = ctypes.c_uint
@@ -106,6 +109,7 @@ process.on('exit',()=>fs.writeFileSync(process.env.SWARM_SAFETY_STATS,JSON.strin
             size = get_short(str(payload), buffer, len(buffer))
             if size and size < len(buffer) and buffer.value.lower() != str(payload).lower():
                 aliases.append((str(payload), str(Path(buffer.value) / missing.name)))
+                aliases.extend((buffer.value + suffix, str(missing)) for suffix in ['.', ' '])
                 short_alias = 'passed'
             for index, (payload_name, output_name) in enumerate(aliases):
                 for option in ['--receipt', '--diagnostics', '--html']:
@@ -122,6 +126,34 @@ process.on('exit',()=>fs.writeFileSync(process.env.SWARM_SAFETY_STATS,JSON.strin
             for suffix in ['.', ' ', ':receipt']:
                 result, _ = command(['verify', seed, payload, '--file', 'good', '--receipt', str(missing) + suffix], code=1)
                 assert result['error'] in ['io','usage'] and not missing.exists()
+                checks += 1
+            # Conservative guards must not turn unsupported input spelling into
+            # a global task failure when the summary is safely outside all roots.
+            for index, suffix in enumerate(['.', ' ']):
+                manifest = root / ('outside-alias-' + str(index) + '.json')
+                manifest.write_text(json.dumps({'schema':'swarmcrate.audit-manifest.v1','tasks':[
+                    {'id':'alias','metainfo':str(seed),'payload':str(payload) + suffix,'files':['good']},
+                    {'id':'good','metainfo':str(seed),'payload':str(payload),'files':['good']}]}), encoding='utf-8')
+                target = root / ('outside-alias-' + str(index) + '-summary.json')
+                result = subprocess.run([node, str(cli), 'audit-batch', str(manifest), str(target)], capture_output=True, text=True, encoding='utf-8')
+                assert result.returncode in [0, 1, 2], (result.stdout, result.stderr)
+                summary = json.loads(result.stdout)
+                assert target.is_file() and summary['tasks'][1]['outcome'] == 'PARTIAL_PASS'
+                assert len(summary['tasks']) == 2 and not summary['all_full_pass'] and not missing.exists()
+                checks += 1
+        else:
+            # These are independent legal POSIX names, not Win32 aliases.
+            for index, suffix in enumerate(['.', ' ']):
+                payload = root / ('posix-input' + suffix)
+                payload.mkdir()
+                (payload / 'good').write_bytes(b'hello')
+                seed = root / ('posix-' + str(index) + '.torrent')
+                command(['create', payload, seed, '--name', 'portable'])
+                sibling = root / 'posix-input'
+                sibling.mkdir(exist_ok=True)
+                target = sibling / ('report-' + str(index) + '.json')
+                result, _ = command(['verify', seed, payload, '--receipt', target])
+                assert result['ok'] and target.is_file()
                 checks += 1
         result = {'output_safety_scenarios': checks, 'windows_alias_scenarios': alias_checks, 'short_alias_fixture': short_alias}
         print(json.dumps(result))
