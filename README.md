@@ -13,7 +13,7 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 长期按三条主线推进：**开源发布与数据集交付、离线镜像巡检、MoonBit 可复用 SDK**。优先级、下一项交付与验收标准见 [开发路线图](docs/ROADMAP.md)。
 
-0.14.2 补强 Windows 输入路径规范化失败后的输出保护，避免末尾点/空格及短路径别名使报告写入声明的载荷目录；保留安全外部汇总的任务隔离和 POSIX 合法文件名。复现证据与实际限制见[输出安全维护说明](docs/output-safety.md)。
+0.14.3 避免在 v1 巡检时给已不可读的分片填充虚构零数据并计算 SHA-1。报告仍逐片统计失败，并保留可读邻居的读取、错误定位和取消检查。见[缺失载荷复现](docs/performance.md#v1-核验缺失载荷0142-与-0143)和[输出安全维护说明](docs/output-safety.md)。
 
 受控创建和批量巡检强制终止后，可用 `staging-list PARENT` 只读识别残留，再用 `staging-clean STAGE --operation ID` 清理一个经确认的本机孤立任务。MoonBit 会核对所有权记录、目录/文件身份、检查快照和进程状态；旧版无记录、活动任务、额外文件或无法确认的条目保留，正式输出不受影响。使用范围、命令和失败边界见[暂存识别与安全清理](docs/staging-cleanup.md)。
 
@@ -81,14 +81,14 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --diagnostics ./f
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.14.2
+node scripts/demo.mjs --output ./artifacts/demo-0.14.3
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告及凭据，以及指定文件的局部校验报告与凭据；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
 
 ## 批量巡检多个镜像或发布包
 
-0.14.2 提供纯 MoonBit 批量 SDK 与磁盘命令。`jobs.json` 使用 `swarmcrate.audit-manifest.v1`，例如：
+批量巡检提供纯 MoonBit SDK 与磁盘命令。`jobs.json` 使用 `swarmcrate.audit-manifest.v1`，例如：
 
 ```json
 {"schema":"swarmcrate.audit-manifest.v1","tasks":[
@@ -121,7 +121,7 @@ python scripts/batch_control_interop.py
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.14.2
+moon add Novanke/swarmcrate@0.14.3
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
@@ -208,7 +208,7 @@ python scripts/interop.py --cli _build/js/release/build/cmd/main/main.js
 python scripts/io_faults.py
 ```
 
-当前有 **55 个核心测试块**，JS 加文件系统/CLI 测试共 **82 个测试块**。独立互操作脚本通过 **215 个真实文件场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
+当前有 **56 个核心测试块**，JS 加文件系统/CLI 测试共 **83 个测试块**。独立互操作脚本通过 **216 个磁盘场景**，涵盖 libtorrent 接收输出、反向读取 libtorrent 生成的数据、torf 校验 v1、Python 独立 SHA-1/Merkle 根、损坏/缺失/截断、磁力链接、编辑保持身份、三种格式的局部校验、自动分片，超过 1 MiB 的批量读取与末片补齐，以及独立 v1 补零、尾部补零、部分文件未对齐时的邻居依赖和损坏定位。还覆盖真实 OS 读取计数、混合核验单遍读取、1 MiB 内部读取失败后的继续检查，以及三种格式的目录变化拦截、稳定/乱序对照、内容标识保持与目录句柄关闭。规划测试禁止打开载荷，且用实际种子的独立解码对照所有计划计数。新增凭据场景独立核对完整 SHA-256、infohash、文件映射、全量/局部/失败状态，并检查输出保护和源文件变化拦截；单遍读取观测同时保存凭据，确保不重复读取载荷。
 
 文件级诊断测试还覆盖字节位图区间并集对照、大偏移字符串、混合格式去重、缺失/短/长/空文件、邻居归属和不完整清单。新增 32 个磁盘场景对照实际文件、独立 v1 补零和三类输出保护；真实异常/短读观测同时导出诊断，确认不会重复读取载荷。
 

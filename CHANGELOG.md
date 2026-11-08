@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.3
+
+- Skip synthetic zero copies and SHA-1 comparisons for unreadable v1 pieces. Keep available boundary-neighbour reads, virtual padding for readable pieces, cancellation checkpoints and report semantics.
+- Cover a missing v1 payload declared as 64 GiB without creating a payload file, and check that readable pieces after a missing boundary still verify.
+
 ## 0.14.2
 
 - Keep additional conservative MoonBit output guards for Windows input spellings whose canonical identity is unavailable: trailing dots/spaces, stream suffixes and short-name ancestors. Never rewrite actual input I/O or relax strict output validation.

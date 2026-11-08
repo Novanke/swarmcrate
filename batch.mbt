@@ -570,7 +570,7 @@ fn audit_batch_impl(
       "producer",
       j_object([
         ("name", Json::string("SwarmCrate")),
-        ("version", Json::string("0.14.2")),
+        ("version", Json::string("0.14.3")),
       ]),
     ),
     ("manifest_sha256", Json::string(manifest.digest)),

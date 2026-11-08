@@ -27,6 +27,32 @@ def command(*parts, code=0):
     return result.stdout
 
 
+def large_missing_v1(directory):
+    """A small metainfo can declare a large unavailable payload."""
+    global checks
+    piece_length, piece_count = 16 * 1024 * 1024, 4096
+    payload = directory / "missing-large.bin"
+    torrent = directory / "missing-large.torrent"
+    torrent.write_bytes(lt.bencode({b"info": {
+        b"name": payload.name.encode("ascii"),
+        b"length": piece_length * piece_count,
+        b"piece length": piece_length,
+        b"pieces": bytes(20 * piece_count),
+    }}))
+    result = subprocess.run(
+        [args.node, str(args.cli), "verify", str(torrent), str(payload), "--detail-limit", "1"],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 2, (result.returncode, result.stdout, result.stderr)
+    report = json.loads(result.stdout)
+    assert not report["ok"] and report["complete"] and report["details_truncated"]
+    assert report["checked_pieces"] == report["failed_pieces"] == report["unreadable_pieces"] == piece_count
+    assert report["file_issues"][0]["reason"] == "missing"
+    assert report["failures"][0]["reason"] == "unreadable" and len(report["failures"]) == 1
+    assert not payload.exists()
+    checks += 1
+
+
 def merkle(data):
     if not data:
         return b""
@@ -743,6 +769,7 @@ with tempfile.TemporaryDirectory(prefix="swarmcrate-interop-") as temp:
     for mode in ["v1", "v2", "hybrid"]:
         selected_verification(directory, bundle, mode)
     padded_v1_verification(directory)
+    large_missing_v1(directory)
     single_pass_hybrid_verification(directory)
     source_snapshot_verification(directory)
     creation_planning(directory)

@@ -104,41 +104,43 @@ fn verify_v1(
       }
       let size = if size > 1048576 { 1048576 } else { size }
       if selected[piece] {
-        let valid_size = entry.padding ||
-          lengths[entry.source] ==
-          Some(parsed.summary.files[entry.source].length)
-        let data = if entry.padding || !valid_size {
-          Bytes::make(size, 0)
-        } else {
-          read_exact(read, entry.source, offset, size) catch {
-            _ => {
-              readable = false
-              Bytes::make(size, 0)
+        if entry.padding {
+          check_verification_control(state.control)
+          if readable {
+            for i in used..<(used + size) {
+              buffer[i] = 0
             }
           }
-        }
-        check_verification_control(state.control)
-        if !valid_size {
-          readable = false
-        }
-        if !entry.padding {
+        } else {
+          // Keep reading available spans for diagnostics and progress, even
+          // after a neighbour makes this piece unreadable.
+          let data = if lengths[entry.source] ==
+            Some(parsed.summary.files[entry.source].length) {
+            Some(read_exact(read, entry.source, offset, size)) catch {
+              _ => None
+            }
+          } else {
+            None
+          }
+          check_verification_control(state.control)
           spans.push({ file: entry.source, offset, length: size, })
+          match data {
+            Some(bytes) =>
+              if readable {
+                buffer.blit_from_bytes(used, bytes, 0, size)
+              }
+            None => readable = false
+          }
         }
-        buffer.blit_from_bytes(used, data, 0, size)
       }
       used += size
       offset += size.to_int64()
       if used == piece_length {
         if selected[piece] {
-          let actual = Bytes::from_array(@crypto.sha1(buffer)[:])
-          record_piece(
-            state,
-            "sha1",
-            piece,
-            spans,
-            actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
-            readable,
-          )
+          let matches = readable &&
+            Bytes::from_array(@crypto.sha1(buffer)[:]) ==
+            parsed.pieces[piece * 20:piece * 20 + 20].to_owned()
+          record_piece(state, "sha1", piece, spans, matches, readable)
         } else {
           state.skipped += 1
         }
@@ -151,17 +153,10 @@ fn verify_v1(
   }
   if used > 0 {
     if selected[piece] {
-      let actual = Bytes::from_array(
-        @crypto.sha1(Bytes::from_array(buffer[0:used]))[:],
-      )
-      record_piece(
-        state,
-        "sha1",
-        piece,
-        spans,
-        actual == parsed.pieces[piece * 20:piece * 20 + 20].to_owned(),
-        readable,
-      )
+      let matches = readable &&
+        Bytes::from_array(@crypto.sha1(Bytes::from_array(buffer[0:used]))[:]) ==
+        parsed.pieces[piece * 20:piece * 20 + 20].to_owned()
+      record_piece(state, "sha1", piece, spans, matches, readable)
     } else {
       state.skipped += 1
     }

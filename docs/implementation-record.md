@@ -39,7 +39,7 @@ The later interoperability, CI and documentation commits are additional evidence
 
 ## Source measurement
 
-`python scripts/source_audit.py` currently reports 22 root implementation files, 4,180 nonblank/non-comment code lines, and 2,573 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
+`python scripts/source_audit.py` currently reports 22 root implementation files, 4,173 nonblank/non-comment code lines, and 2,567 conservative function-body lines. The second metric excludes type declarations, signatures/opening lines, punctuation-only lines, and all inline function bodies on their signature line. Both exclude tests, examples, benchmarks, docs, generated `.mbti`, dependencies, CLI, host adapter and all foreign JavaScript. The algorithm is visible and repeatable; it does not claim to reproduce the organizer's private calculation.
 
 ## Executed verification
 
@@ -81,3 +81,5 @@ Reproduce with the commands in the README and inspect CI logs for the exact publ
 0.14.1 fixes reproduced output-preflight and filesystem-alias failures in MoonBit host/CLI policy, root-path containment, original-object cleanup after competing replacement, and portable Windows device names. The baseline read a whole 1,048,577-byte payload for unusable outputs; fixed preflight performs zero payload opens. Windows namespace/short aliases can no longer route reports into declared missing payloads. Real tests cover ordinary/controlled creation and all report kinds, preserving peer bytes on close faults. Source, CI and exact registry consumption retain the full existing release chain.
 
 0.14.2 retains both lexical and conservative Win32 input guards in MoonBit when strict canonicalization fails, then resolves known short-name ancestors for the additional key. This fixes a synthetic 0.14.1 reproduction that created a missing declared payload file as a report after a trailing-dot/space input failed to read. Input I/O is not rewritten, bad task isolation remains, and POSIX legal dot/space names are not folded.
+
+0.14.3 stops copying and hashing synthetic zeros when a v1 piece is unreadable. The MoonBit verifier keeps reads from available neighbours, actual padding semantics and diagnostic/progress ordering. A disk regression verifies a tiny metainfo declaring a missing 64 GiB payload, and the [comparison](performance.md#v1-核验缺失载荷0142-与-0143) records equal reports on the before-and-after case.

@@ -56,6 +56,48 @@ test "verification catches corruption missing empty files and failures at read b
 }
 
 ///|
+test "unreadable v1 pieces still read real neighbours and leave later hashes intact" {
+  let left = Bytes::make(8, 0)
+  let right = Bytes::makei(32762, fn(i) { (i % 251).to_byte() })
+  let torrent = create_torrent(
+    [{ path: ["left"], length: 8L, }, { path: ["right"], length: 32762L, }],
+    { ..create_options("bundle"), mode: V1, piece_length: 16384, },
+    fn(i, o, n) {
+      let bytes = if i == 0 { left } else { right }
+      bytes[o.to_int():o.to_int() + n].to_owned()
+    },
+  )
+  let reads : Array[(Int32, Int64)] = []
+  let report = verify_payload(torrent, [None, Some(32762L)], fn(i, o, n) {
+    reads.push((i, o))
+    right[o.to_int():o.to_int() + n].to_owned()
+  })
+  assert_eq(reads, [(1, 0L), (1, 16376L), (1, 32760L)])
+  assert_eq(report.checked_pieces, 3)
+  assert_eq(report.failed_pieces, 1)
+  assert_eq(report.unreadable_pieces, 1)
+  assert_eq(report.failures[0].reason, "unreadable")
+  assert_eq(report.failures[0].spans.length(), 2)
+  assert_eq(report.failures[0].spans[1].length, 16376)
+  let unreadable_tail = verify_payload(torrent, [Some(8L), Some(32762L)], fn(
+    i,
+    o,
+    n,
+  ) raise CrateError {
+    if i == 1 && o == 32760L {
+      raise CrateError("io", "unreadable tail")
+    }
+    let bytes = if i == 0 { left } else { right }
+    bytes[o.to_int():o.to_int() + n].to_owned()
+  })
+  assert_eq(unreadable_tail.checked_pieces, 3)
+  assert_eq(unreadable_tail.failed_pieces, 1)
+  assert_eq(unreadable_tail.unreadable_pieces, 1)
+  assert_eq(unreadable_tail.failures[0].piece, 2)
+  assert_eq(unreadable_tail.failures[0].reason, "unreadable")
+}
+
+///|
 test "a failed v2 block affects only its piece and later pieces are still checked" {
   let data = Bytes::makei(98305, fn(i) { (i % 251).to_byte() })
   for mode in [V2, Hybrid] {

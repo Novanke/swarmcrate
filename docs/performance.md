@@ -1,5 +1,13 @@
 # Reproducible performance comparison
 
+## v1 核验缺失载荷（0.14.2 与 0.14.3）
+
+0.14.2 仍为缺失或不可读的 v1 分片填充虚构零数据并计算 SHA-1，结果随后被标记为不可读。0.14.3 直接跳过这些复制和哈希，保留可读邻居读取、实际补零、失败跨度和计数。
+
+在 Windows x64、Node.js 24.21.0、moonc 0.10.16 下，对同一个声明 256 MiB 加 1 字节且载荷不存在的 v1 种子，使用优化 JS CLI 各运行三次。进程启动至返回的中位数为 2.901 秒和 0.098 秒。两版 JSON 报告相同，都返回退出码 2、257 个不可读分片和截断标记。这次测量仅涵盖该缺失场景，不能用于推断正常载荷吞吐。
+
+`scripts/interop.py` 中的 `large_missing_v1` 构造声明 64 GiB 的元数据而无需创建载荷文件，核对 4,096 个分片全部标为不可读、细节受限和目标仍不存在。子进程的 30 秒上限用于终止回退到无意义哈希的运行。
+
 ## Hybrid verification: 0.4.0 to 0.5.0
 
 Measured on 2026-10-26, Windows x64, Node.js v24.19.0, MoonBit stable 2026-10-16, optimized JS. The same current `bench/main.mbt` was compiled against registry `Novanke/swarmcrate@0.4.0` and the new implementation. Five alternating process runs; medians shown. Torrent creation and final display inspection are outside the verification interval; parsing and layout validation inside `verify_payload` are included. The synthetic payload is 8 MiB + 3 bytes valued 7, using 256 KiB hybrid pieces.
