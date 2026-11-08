@@ -20,6 +20,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install official MoonBit toolchain
+        env:
+          MOONBIT_INSTALL_VERSION: '0.10.16+b1a0e846e'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
@@ -29,7 +31,7 @@ jobs:
             curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
             echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           fi
-      - name: Format interfaces and both backends
+      - name: Check toolchain, formatting and interfaces
         shell: bash
         run: |
           node --version
@@ -38,6 +40,9 @@ jobs:
           moon fmt --check
           moon info
           git diff --exit-code -- '*.mbti'
+      - name: Build and test both backends
+        shell: bash
+        run: |
           moon check --target wasm-gc --deny-warn
           moon test --target wasm-gc --deny-warn
           moon test --target js --deny-warn
