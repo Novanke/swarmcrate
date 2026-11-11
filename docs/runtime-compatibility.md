@@ -1,6 +1,23 @@
 # 运行环境、I/O 故障与独立复现
 
-SwarmCrate 的根库支持 MoonBit Wasm GC 与 JS；磁盘适配和 CLI 使用 Node.js，最低兼容基线为 [22.16.0](https://nodejs.org/en/blog/release/v22.16.0)。最低兼容测试不是要求用户固定使用旧版本；CI 同时覆盖 Node 24。编译器仍要求稳定 moonc ≥ 0.10.14。
+SwarmCrate 的根库支持 MoonBit Wasm GC 与 JS；磁盘适配和 CLI 使用 Node.js，最低兼容基线为 [22.16.0](https://nodejs.org/en/blog/release/v22.16.0)。CI 同时覆盖 Node 24。从 0.14.4 起，源码的受支持编译器基线为稳定 moonc ≥ 0.10.20。
+
+## 2026-11-11 官方稳定版兼容性检查
+
+本轮从[官方安装入口](https://www.moonbitlang.com/download/)获取当前稳定版，核对固定版本的下载包与 latest 包具有相同 SHA-256，再使用独立工具链执行仓库现有检查。Windows x86-64 压缩包 SHA-256 为 `bdff9a3b2d7c61a3adae2fe09221d3de63effc6cab28bfa0cbeb94fb0d529d79`。
+
+`moon version --all` 的实际版本信息为
+
+```text
+moon 0.1.20261104 (940aa18 2026-11-04)
+moonc v0.10.20+65efd5b93 (2026-11-05)
+moonrun 0.1.20261104 (940aa18 2026-11-04)
+Feature flags enabled: rr_moon_mod,rr_moon_pkg
+```
+
+0.14.3 的两处尾置 `derive(...)` 在该编译器下产生弃用警告，现有 `--deny-warn` 会阻断构建。0.14.4 将其改为 `#derive(...)`，刷新编译器生成的公开接口，并保留原有类型、派生行为与 `moonbitlang/x@0.5.5` 依赖。已验证 0.10.16 不识别新派生属性，因此同步提高 README 和版本检查脚本的编译器基线。
+
+本机使用 Node.js 22.16.0，通过 Wasm GC 的 56 项测试和 JS 的 83 项测试，完成两套后端的严格检查、优化 JS 构建和全部可移植示例。真实文件演示覆盖三种种子格式、完整/局部核验、损坏检测与凭据导出。文件互操作、进度取消、写入故障、暂存清理和输出保护脚本继续作为发布门槛，公开 CI 在 Windows/Linux 与 Node 22.16.0/24 组合上执行。
 
 ## 0.11.1 修复的实际问题
 
@@ -33,7 +50,7 @@ python scripts/io_faults.py
 
 替换 PATH 中的 Node 即可测试其他版本；三个 Python 控制/故障脚本也支持 `--node /absolute/path/to/node`。`io_faults.py` 的 21 个场景分别覆盖三种格式的成功基准、种子读取关闭失败、创建读取关闭失败、核验读取关闭失败及后续片继续、普通种子输出关闭失败、凭据输出关闭失败、原子暂存关闭失败。它只操作新建的合成临时文件，不修改用户数据。
 
-CI 在 Windows/Linux × Node 22.16.0/24 上执行相同测试链路及双后端可移植示例。官方安装器固定到已验证的 moonc `0.10.16+b1a0e846e`，避免滚动下载改变格式检查和构建结果。发布后另在全新消费工程安装精确 Mooncakes 版本，实际调用公共 API 并与发布档案核对；本文件不代替对应 Git 提交的公开 CI 和精确版本下载证据。
+CI 在 Windows/Linux × Node 22.16.0/24 上执行相同测试链路及双后端可移植示例。官方安装器固定到本轮验证的 moonc `0.10.20+65efd5b93`，以便复现。发布后另在全新消费工程安装精确 Mooncakes 版本，实际调用公共 API 并与发布档案核对；本文件不代替对应 Git 提交的公开 CI 和精确版本下载证据。
 
 ## 后续有价值但尚未交付的方向
 

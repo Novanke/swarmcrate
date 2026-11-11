@@ -3,6 +3,7 @@ package "Novanke/swarmcrate"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -18,7 +19,7 @@ pub fn batch_audit_json_text(BatchAudit) -> String
 
 pub fn batch_manifest_tasks(BatchManifest) -> Array[BatchTask]
 
-pub fn batch_progress_json(BatchProgress) -> Json
+pub fn batch_progress_json(BatchProgress) -> @json.Json
 
 pub fn check_bencode(Bytes) -> Unit raise CrateError
 
@@ -38,7 +39,7 @@ pub fn format_magnet(Magnet) -> String raise CrateError
 
 pub fn hash_v2_file(Int64, Int32, (Int64, Int32) -> Bytes raise CrateError) -> V2FileHash raise CrateError
 
-pub fn info_json(TorrentInfo) -> Json
+pub fn info_json(TorrentInfo) -> @json.Json
 
 pub fn inspect_torrent(Bytes) -> TorrentInfo raise CrateError
 
@@ -52,7 +53,7 @@ pub fn parse_staging_owner(Bytes) -> StagingOwner raise CrateError
 
 pub fn piece_spans(Array[SourceFile], Int32, Int32) -> Array[PieceSpan] raise CrateError
 
-pub fn plan_json(TorrentPlan) -> Json
+pub fn plan_json(TorrentPlan) -> @json.Json
 
 pub fn plan_torrent(Array[SourceFile], CreateOptions) -> TorrentPlan raise CrateError
 
@@ -82,7 +83,7 @@ pub fn validate_sources(Array[SourceFile]) -> Int64 raise CrateError
 
 pub fn verification_html(TorrentInfo, VerificationReport) -> String
 
-pub fn verification_json(VerificationReport) -> Json
+pub fn verification_json(VerificationReport) -> @json.Json
 
 pub fn verification_scope(Bytes, selected_files? : Array[Int32]?) -> VerificationScope raise CrateError
 
@@ -93,9 +94,10 @@ pub fn verify_with_control(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes 
 pub fn verify_with_receipt(Bytes, Array[Int64?], (Int32, Int64, Int32) -> Bytes raise CrateError, detail_limit? : Int32, selected_files? : Array[Int32]?) -> (VerificationReport, VerificationReceipt) raise CrateError
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror CrateError {
   CrateError(String, String)
-} derive(@debug.Debug)
+}
 pub fn CrateError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -230,11 +232,12 @@ pub(all) struct TorrentInfo {
   info_hash_v2 : String?
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TorrentMode {
   V1
   V2
   Hybrid
-} derive(Eq, @debug.Debug)
+}
 pub fn TorrentMode::equal(Self, Self) -> Bool
 pub fn TorrentMode::not_equal(Self, Self) -> Bool
 pub fn TorrentMode::to_repr(Self) -> @debug.Repr

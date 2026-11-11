@@ -1,20 +1,24 @@
-# 验收自查与证据入口 — 0.14.3
+# 验收自查与证据入口 — 0.14.4
 
 依据参赛者在 2026-10-25 提供的九项最终验收指南核对。已通过初审的选手，验收前无需再提交表格，只需持续开发并上传对应内容到 GitHub。本记录由 AI 辅助整理，提供可复现的技术证据，最终验收由主办方评定。
 
 | 验收项 | 当前证据与复现入口 |
 | --- | --- |
-| 1. MoonBit 为主要语言，moonc ≥ 0.10.14 | 根库实现元数据、布局、创建、核验与报告；CLI 策略也用 MoonBit 实现，JS 桥只做 OS I/O。本版验证 moonc 0.10.16；CI 用 `scripts/check_toolchain.py` 强制检查编译器下限。 |
+| 1. MoonBit 为主要语言，moonc ≥ 0.10.14 | 根库实现元数据、布局、创建、核验与报告；CLI 策略也用 MoonBit 实现，JS 桥只做 OS I/O。0.14.4 验证官方当前稳定版 moonc 0.10.20+65efd5b93，源码支持基线为 0.10.20；CI 用 `scripts/check_toolchain.py` 强制检查。 |
 | 2. 公开 GitHub、提交清晰 | [公开仓库](https://github.com/Novanke/swarmcrate)保留正常连续历史、功能提交和版本标签。[实现记录](implementation-record.md)只将真实功能工作列为功能里程碑。 |
 | 3. 源码结构与核心功能 | 根包是可移植库，`host/` 是文件 I/O，`cli/` 是命令处理。交付“文件→标准种子/磁力链接”“种子+文件→核验报告”及“多任务清单→身份绑定汇总”的完整离线流程；见[设计说明](design.md)、[接口约定](API.md)。 |
 | 4. README 可复现 | README 说明目标、工具链下限、安装、构建、参数、退出码、库调用、完整演示、兼容范围与资源限制。依赖固定为 `moonbitlang/x@0.5.5`。 |
 | 5. CI 覆盖检查、构建、测试 | Windows/Linux × Node 22.16.0/24 执行版本、格式、接口差异、Wasm GC 检查、双后端测试、优化 JS 构建、双后端库示例、真实文件演示及第三方互操作；见 `.github/workflows/ci.yml`。 |
 | 6. 可运行示例 | `moon run examples/library --target wasm-gc --release --deny-warn`，也可换为 `js`；无需外部文件，三个模式均演示完整创建/检查/核验及损坏检测。`node scripts/demo.mjs --output ./artifacts/my-demo` 演示实际文件链路。 |
 | 7. 核心路径测试 | 56 个 Wasm GC 核心测试块、83 个 JS 测试块；独立互操作覆盖真实文件创建、读取、缺失及损坏，使用 libtorrent、torf 与 Python 哈希。测试块和磁盘场景分别统计。 |
-| 8. 发布 Mooncakes | [0.14.3 包页](https://mooncakes.io/docs/Novanke/swarmcrate@0.14.3)。按[发布流程](releasing.md)先测试与公开 CI，再发布并用独立消费工程安装精确版本，执行真实创建/核验，最后匹配 Git 标签。 |
+| 8. 发布 Mooncakes | [0.14.4 包页](https://mooncakes.io/docs/Novanke/swarmcrate@0.14.4)。按[发布流程](releasing.md)先测试与公开 CI，再发布并用独立消费工程安装精确版本，执行真实创建/核验，最后匹配 Git 标签。 |
 | 9. OSI 许可证与来源 | Apache-2.0；[LICENSE](../LICENSE)、[THIRD_PARTY.md](../THIRD_PARTY.md)列明依赖及来源。按公开 BEP 独立实现，未复制第三方客户端源码，crypto 依赖不计入自写代码量。 |
 
-## 本轮实际补强
+## 本轮兼容性维护
+
+2026-11-11 依照持续可用性提醒，使用 `moon version --all` 记录官方稳定工具链。两处旧派生语法适配为 `#derive(...)`，同步公开接口、CI 精确版本和最低编译器检查。当前依赖可通过严格构建和核心示例，保持 `moonbitlang/x@0.5.5`。完整版本、检查入口及支持边界见[运行环境记录](runtime-compatibility.md)。
+
+## 0.14.3 已有补强
 
 - 缺失或不可读的 v1 分片仍被逐片报告，但不再为它们复制合成零字节或计算 SHA-1；可读邻居、真实补零和取消语义保持原有行为。
 - 对声明 256 MiB 加 1 字节的缺失载荷，两版报告一致。在本机三次对照中，优化 JS CLI 中位数由 2.901 秒降至 0.098 秒。另有仅创建元数据的 64 GiB 缺失载荷回归和 v1 边界后续可读分片回归。见[复现与测量边界](performance.md#v1-核验缺失载荷0142-与-0143)。

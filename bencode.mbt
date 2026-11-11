@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 pub(all) suberror CrateError {
   CrateError(String, String)
-} derive(Debug)
+}
 
 ///|
 pub extend CrateError with Debug::{to_repr}

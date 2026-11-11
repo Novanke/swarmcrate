@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum TorrentMode {
   V1
   V2
   Hybrid
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend TorrentMode with Eq::{equal, not_equal}

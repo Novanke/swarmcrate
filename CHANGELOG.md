@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.4
+
+- Adapt the two trait derivations to the syntax required by the current stable compiler with warnings denied. Keep public API behavior and the pinned crypto dependency.
+- Require moonc 0.10.20 or newer and pin CI to the verified official 0.10.20+65efd5b93 release. Record the full compiler, build-tool and runner versions in the runtime compatibility evidence.
+
 ## 0.14.3
 
 - Skip synthetic zero copies and SHA-1 comparisons for unreadable v1 pieces. Keep available boundary-neighbour reads, virtual padding for readable pieces, cancellation checkpoints and report semantics.

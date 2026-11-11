@@ -19,7 +19,7 @@ SwarmCrate 直接读取本地文件或目录，生成可被 BitTorrent 客户端
 
 ## 快速使用
 
-安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，要求 **moonc ≥ 0.10.14**，本版验证使用 **0.10.16**；另安装 Node.js 22.16+。CI 会检查编译器版本下限。克隆后执行：
+安装官方 [MoonBit 工具链](https://www.moonbitlang.com/download/)，从 0.14.4 起要求 **moonc ≥ 0.10.20**，本版验证使用 **0.10.20+65efd5b93**；另安装 Node.js 22.16+。新版编译器的派生语法已适配，CI 会检查编译器版本下限。克隆后执行：
 
 ```sh
 git clone https://github.com/Novanke/swarmcrate.git
@@ -81,7 +81,7 @@ node scripts/swarmcrate.mjs verify ./release.torrent ./release --diagnostics ./f
 ```sh
 node scripts/demo.mjs
 # 再次演示时选择新的输出目录
-node scripts/demo.mjs --output ./artifacts/demo-0.14.3
+node scripts/demo.mjs --output ./artifacts/demo-0.14.4
 ```
 
 默认在 `artifacts/demo/` 生成合成演示文件、三种格式种子、正确与损坏核验报告及凭据，以及指定文件的局部校验报告与凭据；已有目录不会覆盖，可用 `--output` 指定新目录。演示目录不纳入源码统计或发布包。
@@ -121,7 +121,7 @@ python scripts/batch_control_interop.py
 ## 在 MoonBit 工程中使用
 
 ```sh
-moon add Novanke/swarmcrate@0.14.3
+moon add Novanke/swarmcrate@0.14.4
 ```
 
 在消费方 `moon.pkg` 导入 `"Novanke/swarmcrate" @swarm`，然后调用：
